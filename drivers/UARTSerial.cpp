@@ -37,6 +37,9 @@ UARTSerial::UARTSerial(PinName tx, PinName rx, int baud) :
 {
     /* Attatch IRQ routines to the serial device. */
     SerialBase::attach(callback(this, &UARTSerial::rx_irq), RxIrq);
+#if DEVICE_SERIAL_ASYNCH
+    SerialBase::set_dma_usage_tx(DMA_USAGE_OPPORTUNISTIC);
+#endif
 }
 
 UARTSerial::~UARTSerial()
@@ -133,6 +136,35 @@ void UARTSerial::sigio(Callback<void()> func) {
     core_util_critical_section_exit();
 }
 
+void UARTSerial::start_tx()
+{
+#if DEVICE_SERIAL_ASYNCH
+    const char *data;
+    size_t count = _txbuf.peek_available_contiguous(data);
+    if (count == 0) {
+        return;
+    }
+    // Limit transfer to half buffer size, to allow us to start loading more
+    // once half data has been output.
+    if (count > MBED_CONF_DRIVERS_UART_SERIAL_TXBUF_SIZE / 2) {
+        count = MBED_CONF_DRIVERS_UART_SERIAL_TXBUF_SIZE / 2;
+    }
+    _tx_irq_enabled = true;
+    _tx_transfer_size = count;
+    if (SerialBase::write(reinterpret_cast<const uint8_t *>(data), count,
+                          callback(this, &UARTSerial::tx_irq)) < 0) {
+        _tx_irq_enabled = false;
+        _tx_transfer_size = 0;
+    }
+#else
+    UARTSerial::tx_irq();                // only write to hardware in one place
+    if (!_txbuf.empty()) {
+         SerialBase::attach(callback(this, &UARTSerial::tx_irq), TxIrq);
+          _tx_irq_enabled = true;
+    }
+#endif
+}
+
 ssize_t UARTSerial::write(const void* buffer, size_t length)
 {
     size_t data_written = 0;
@@ -167,11 +199,7 @@ ssize_t UARTSerial::write(const void* buffer, size_t length)
 
         core_util_critical_section_enter();
         if (!_tx_irq_enabled) {
-            UARTSerial::tx_irq();                // only write to hardware in one place
-            if (!_txbuf.empty()) {
-                SerialBase::attach(callback(this, &UARTSerial::tx_irq), TxIrq);
-                _tx_irq_enabled = true;
-            }
+            start_tx();
         }
         core_util_critical_section_exit();
     }
@@ -301,6 +329,27 @@ void UARTSerial::rx_irq(void)
     }
 }
 
+#if DEVICE_SERIAL_ASYNCH
+// Called when transfer has finished
+void UARTSerial::tx_irq(int /*event*/)
+{
+    _tx_irq_enabled = false;
+    if (_tx_transfer_size == 0) {
+        return;
+    }
+    bool was_full = _txbuf.full();
+
+    _txbuf.drop_n(_tx_transfer_size);
+    _tx_transfer_size = 0;
+
+    /* Report that data can be written to buffer */
+    if (was_full && !hup()) {
+        wake();
+    }
+
+    start_tx();
+}
+#else
 // Also called from write to start transfer
 void UARTSerial::tx_irq(void)
 {
@@ -319,11 +368,13 @@ void UARTSerial::tx_irq(void)
         _tx_irq_enabled = false;
     }
 
-    /* Report the File handler that data can be written to peripheral. */
+    /* Report that data can be written to buffer */
     if (was_full && !_txbuf.full() && !hup()) {
         wake();
     }
+
 }
+#endif
 
 void UARTSerial::wait_ms(uint32_t millisec)
 {

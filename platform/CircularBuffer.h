@@ -46,7 +46,7 @@ public:
      */
     void push(const T& data) {
         core_util_critical_section_enter();
-        if (full()) {
+        if (_full) {
             _tail++;
             _tail %= BufferSize;
         }
@@ -66,7 +66,7 @@ public:
     bool pop(T& data) {
         bool data_popped = false;
         core_util_critical_section_enter();
-        if (!empty()) {
+        if (!empty_critical()) {
             data = _pool[_tail++];
             _tail %= BufferSize;
             _full = false;
@@ -76,13 +76,54 @@ public:
         return data_popped;
     }
 
+    /** Peek at the available data
+     *
+     * Get a direct pointer to a contiguous amount of available data,
+     * eg for DMA transmission.
+     *
+     * @param[out] ptr Pointer to available data if not empty, else NULL
+     * @return Amount of available data
+     */
+    size_t peek_available_contiguous(const T*& ptr) {
+        core_util_critical_section_enter();
+        if (empty_critical()) {
+            core_util_critical_section_exit();
+            ptr = NULL;
+            return 0;
+        }
+        size_t count;
+        ptr = _pool + _tail;
+        if (_tail < _head) {
+            count = _head - _tail;
+        } else {
+            count = BufferSize - _tail; // includes full case
+        }
+        core_util_critical_section_exit();
+        return count;
+    }
+
+    /** Consume available data
+     *
+     * Advance the read pointer to consume data, eg after using peek_available
+     *
+     * @param count Amount of data to consume
+     */
+    void drop_n(size_t count) {
+        core_util_critical_section_enter();
+        _tail += count;
+        _tail %= BufferSize;
+        _full = false;
+        core_util_critical_section_exit();
+    }
+
+
     /** Check if the buffer is empty
      *
      * @return True if the buffer is empty, false if not
      */
     bool empty() const {
         core_util_critical_section_enter();
-        bool is_empty = (_head == _tail) && !_full;
+        bool is_empty = empty_critical();
         core_util_critical_section_exit();
         return is_empty;
     }
@@ -127,6 +168,10 @@ public:
     }
     
 private:
+    bool empty_critical() const {
+        return (_head == _tail) && !_full;
+    }
+
     T _pool[BufferSize];
     volatile CounterType _head;
     volatile CounterType _tail;

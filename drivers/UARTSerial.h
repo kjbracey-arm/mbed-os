@@ -242,6 +242,7 @@ private:
     bool _blocking;
     bool _tx_irq_enabled;
     bool _rx_irq_enabled;
+    size_t _tx_transfer_size;
     InterruptIn *_dcd_irq;
 
     /** Device Hanged up
@@ -256,7 +257,12 @@ private:
      *  Copies data into Circular Buffer.
      *  Reports the state change to File handle.
      */
+#if DEVICE_SERIAL_ASYNCH
+    void tx_irq(int event);
+    void start_tx();
+#else
     void tx_irq(void);
+#endif
     void rx_irq(void);
 
     void wake(void);
