@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include "cmsis_os.h"
 #include "rtos/Mutex.h"
+#include "ns_list.h"
 
 #include "platform/NonCopyable.h"
 
@@ -193,10 +194,8 @@ public:
     ~ConditionVariable();
 
 private:
-    void _add_wait_list(Waiter * waiter);
-    void _remove_wait_list(Waiter * waiter);
     Mutex &_mutex;
-    Waiter *_wait_list;
+    NS_LIST_HEAD_INCOMPLETE(Waiter) _wait_list;
 };
 
 }

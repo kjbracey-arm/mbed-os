@@ -23,6 +23,8 @@
 #include "rtos/Semaphore.h"
 #include "rtos/Thread.h"
 
+#include "ns_list.h"
+
 #include "mbed_error.h"
 #include "mbed_assert.h"
 
@@ -32,20 +34,22 @@ namespace rtos {
 
 struct Waiter {
     Waiter();
+    ns_list_link_t link;
     Semaphore sem;
-    Waiter *prev;
-    Waiter *next;
     bool in_list;
 };
 
-Waiter::Waiter(): sem(0), prev(NULL), next(NULL), in_list(false)
+NS_STATIC_ASSERT(offsetof(Waiter, link) == 0,
+    "Waiter::link must be first, because ConditionVariable::_wait_list uses NS_LIST_HEAD_INCOMPLETE")
+
+Waiter::Waiter(): sem(0), in_list(false)
 {
-    // No initialization to do
+    ns_list_link_init(this, link);
 }
 
-ConditionVariable::ConditionVariable(Mutex &mutex): _mutex(mutex), _wait_list(NULL)
+ConditionVariable::ConditionVariable(Mutex &mutex): _mutex(mutex)
 {
-    // No initialization to do
+    ns_list_init(&_wait_list);
 }
 
 void ConditionVariable::wait()
@@ -58,7 +62,8 @@ bool ConditionVariable::wait_for(uint32_t millisec)
     Waiter current_thread;
     MBED_ASSERT(_mutex.get_owner() == Thread::gettid());
     MBED_ASSERT(_mutex._count == 1);
-    _add_wait_list(&current_thread);
+    ns_list_add_to_end(&_wait_list, &current_thread);
+    current_thread.in_list = true;
 
     _mutex.unlock();
 
@@ -68,7 +73,7 @@ bool ConditionVariable::wait_for(uint32_t millisec)
     _mutex.lock();
 
     if (current_thread.in_list) {
-        _remove_wait_list(&current_thread);
+        ns_list_remove(&_wait_list, &current_thread);
     }
 
     return timeout;
@@ -77,60 +82,27 @@ bool ConditionVariable::wait_for(uint32_t millisec)
 void ConditionVariable::notify_one()
 {
     MBED_ASSERT(_mutex.get_owner() == Thread::gettid());
-    if (_wait_list != NULL) {
-        _wait_list->sem.release();
-        _remove_wait_list(_wait_list);
+    Waiter *waiter = ns_list_get_first(&_wait_list);
+    if (waiter) {
+        ns_list_remove(&_wait_list, waiter);
+        waiter->in_list = false;
+        waiter->sem.release();
     }
 }
 
 void ConditionVariable::notify_all()
 {
     MBED_ASSERT(_mutex.get_owner() == Thread::gettid());
-    while (_wait_list != NULL) {
-        _wait_list->sem.release();
-        _remove_wait_list(_wait_list);
-    }
-}
-
-void ConditionVariable::_add_wait_list(Waiter * waiter)
-{
-    if (NULL == _wait_list) {
-        // Nothing in the list so add it directly.
-        // Update prev pointer to reference self
-        _wait_list = waiter;
-        waiter->prev = waiter;
-    } else {
-        // Add after the last element
-        Waiter *last = _wait_list->prev;
-        last->next = waiter;
-        waiter->prev = last;
-        _wait_list->prev = waiter;
-    }
-    waiter->in_list = true;
-}
-
-void ConditionVariable::_remove_wait_list(Waiter * waiter)
-{
-    // Remove this element from the start of the list
-    Waiter * next = waiter->next;
-    if (waiter == _wait_list) {
-        _wait_list = next;
-    }
-    if (next != NULL) {
-        next = waiter->prev;
-    }
-    Waiter * prev = waiter->prev;
-    if (prev != NULL) {
-        prev = waiter->next;
-    }
-    waiter->next = NULL;
-    waiter->prev = NULL;
-    waiter->in_list = false;
+    ns_list_foreach_safe(Waiter, waiter, &_wait_list) {
+        ns_list_remove(&_wait_list, waiter);
+        waiter->in_list = false;
+        waiter->sem.release();
+   }
 }
 
 ConditionVariable::~ConditionVariable()
 {
-    MBED_ASSERT(NULL == _wait_list);
+    MBED_ASSERT(ns_list_is_empty(&_wait_list));
 }
 
 }
