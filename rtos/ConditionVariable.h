@@ -220,7 +220,7 @@ protected:
     static void _add_wait_list(Waiter **wait_list, Waiter *waiter);
     static void _remove_wait_list(Waiter **wait_list, Waiter *waiter);
     Mutex &_mutex;
-    Waiter *_wait_list;
+    Waiter *_wait_list; // protected by _mutex
 };
 
 }

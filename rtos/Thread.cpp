@@ -358,7 +358,15 @@ osStatus Thread::yield() {
 }
 
 osThreadId Thread::gettid() {
+#if defined(MBED_OS_BACKEND_RTX5)
+    // This works when interrupts are disabled (but still in thread context).
+    // Functionality required by ConditionVariableCS, which needs to get the
+    // current thread ID before it leaves a critical section to implement
+    // atomic wait-and-unlock.
+    return osRtxInfo.thread.run.curr;
+#else
     return osThreadGetId();
+#endif
 }
 
 void Thread::attach_idle_hook(void (*fptr)(void)) {
