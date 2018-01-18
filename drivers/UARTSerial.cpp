@@ -71,17 +71,17 @@ void UARTSerial::set_data_carrier_detect(PinName dcd_pin, bool active_high)
 
 void UARTSerial::set_format(int bits, Parity parity, int stop_bits)
 {
-    api_lock();
+    core_util_critical_section_enter();
     SerialBase::format(bits, parity, stop_bits);
-    api_unlock();
+    core_util_critical_section_exit();
 }
 
 #if DEVICE_SERIAL_FC
 void UARTSerial::set_flow_control(Flow type, PinName flow1, PinName flow2)
 {
-    api_lock();
+    core_util_critical_section_enter();
     SerialBase::set_flow_control(type, flow1, flow2);
-    api_unlock();
+    core_util_critical_section_exit();
 }
 #endif
 
@@ -107,16 +107,10 @@ off_t UARTSerial::seek(off_t offset, int whence)
 
 int UARTSerial::sync()
 {
-    api_lock();
-
     while (!_txbuf.empty()) {
-        api_unlock();
         // Doing better than wait would require TxIRQ to also do wake() when becoming empty. Worth it?
         wait_ms(1);
-        api_lock();
     }
-
-    api_unlock();
 
     return 0;
 }
@@ -142,8 +136,6 @@ ssize_t UARTSerial::write(const void* buffer, size_t length)
         return 0;
     }
 
-    api_lock();
-
     // Unlike read, we should write the whole thing if blocking. POSIX only
     // allows partial as a side-effect of signal handling; it normally tries to
     // write everything if blocking. Without signals we can always write all.
@@ -154,9 +146,7 @@ ssize_t UARTSerial::write(const void* buffer, size_t length)
                 break;
             }
             do {
-                api_unlock();
                 wait_ms(1); // XXX todo - proper wait, WFE for non-rtos ?
-                api_lock();
             } while (_txbuf.full());
         }
 
@@ -176,8 +166,6 @@ ssize_t UARTSerial::write(const void* buffer, size_t length)
         core_util_critical_section_exit();
     }
 
-    api_unlock();
-
     return data_written != 0 ? (ssize_t) data_written : (ssize_t) -EAGAIN;
 }
 
@@ -191,16 +179,11 @@ ssize_t UARTSerial::read(void* buffer, size_t length)
         return 0;
     }
 
-    api_lock();
-
     while (_rxbuf.empty()) {
         if (!_blocking) {
-            api_unlock();
             return -EAGAIN;
         }
-        api_unlock();
         wait_ms(1);  // XXX todo - proper wait, WFE for non-rtos ?
-        api_lock();
     }
 
     while (data_read < length && !_rxbuf.empty()) {
@@ -217,8 +200,6 @@ ssize_t UARTSerial::read(void* buffer, size_t length)
         }
     }
     core_util_critical_section_exit();
-
-    api_unlock();
 
     return data_read;
 }
@@ -267,16 +248,6 @@ void UARTSerial::lock()
 void UARTSerial::unlock()
 {
     // This is the override for SerialBase.
-}
-
-void UARTSerial::api_lock(void)
-{
-    _mutex.lock();
-}
-
-void UARTSerial::api_unlock(void)
-{
-    _mutex.unlock();
 }
 
 void UARTSerial::rx_irq(void)

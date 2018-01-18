@@ -24,7 +24,6 @@
 #include "FileHandle.h"
 #include "SerialBase.h"
 #include "InterruptIn.h"
-#include "PlatformMutex.h"
 #include "serial_api.h"
 #include "CircularBuffer.h"
 #include "platform/NonCopyable.h"
@@ -223,19 +222,11 @@ private:
     /** SerialBase unlock override */
     virtual void unlock(void);
 
-    /** Acquire mutex */
-    virtual void api_lock(void);
-
-    /** Release mutex */
-    virtual void api_unlock(void);
-
     /** Software serial buffers
      *  By default buffer size is 256 for TX and 256 for RX. Configurable through mbed_app.json
      */
     CircularBuffer<char, MBED_CONF_DRIVERS_UART_SERIAL_RXBUF_SIZE> _rxbuf;
     CircularBuffer<char, MBED_CONF_DRIVERS_UART_SERIAL_TXBUF_SIZE> _txbuf;
-
-    PlatformMutex _mutex;
 
     Callback<void()> _sigio_cb;
 
