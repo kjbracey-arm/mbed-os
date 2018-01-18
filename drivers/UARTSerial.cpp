@@ -46,7 +46,7 @@ UARTSerial::~UARTSerial()
 
 void UARTSerial::dcd_irq()
 {
-    wake();
+    wake(NULL);
 }
 
 void UARTSerial::set_baud(int baud)
@@ -107,10 +107,13 @@ off_t UARTSerial::seek(off_t offset, int whence)
 
 int UARTSerial::sync()
 {
+    core_util_critical_section_enter();
     while (!_txbuf.empty()) {
-        // Doing better than wait would require TxIRQ to also do wake() when becoming empty. Worth it?
-        wait_ms(1);
+        // We don't actually currently notify _cv_tx on empty, so use a timeout.
+        // (And may as well still use the CV code we have anyway...)
+        _cv_tx.wait_for(1);
     }
+    core_util_critical_section_exit();
 
     return 0;
 }
@@ -136,6 +139,8 @@ ssize_t UARTSerial::write(const void* buffer, size_t length)
         return 0;
     }
 
+    core_util_critical_section_enter();
+
     // Unlike read, we should write the whole thing if blocking. POSIX only
     // allows partial as a side-effect of signal handling; it normally tries to
     // write everything if blocking. Without signals we can always write all.
@@ -146,7 +151,7 @@ ssize_t UARTSerial::write(const void* buffer, size_t length)
                 break;
             }
             do {
-                wait_ms(1); // XXX todo - proper wait, WFE for non-rtos ?
+                _cv_tx.wait();
             } while (_txbuf.full());
         }
 
@@ -155,7 +160,6 @@ ssize_t UARTSerial::write(const void* buffer, size_t length)
             data_written++;
         }
 
-        core_util_critical_section_enter();
         if (!_tx_irq_enabled) {
             UARTSerial::tx_irq();                // only write to hardware in one place
             if (!_txbuf.empty()) {
@@ -163,8 +167,8 @@ ssize_t UARTSerial::write(const void* buffer, size_t length)
                 _tx_irq_enabled = true;
             }
         }
-        core_util_critical_section_exit();
     }
+    core_util_critical_section_exit();
 
     return data_written != 0 ? (ssize_t) data_written : (ssize_t) -EAGAIN;
 }
@@ -179,11 +183,13 @@ ssize_t UARTSerial::read(void* buffer, size_t length)
         return 0;
     }
 
+    core_util_critical_section_enter();
     while (_rxbuf.empty()) {
         if (!_blocking) {
+            core_util_critical_section_exit();
             return -EAGAIN;
         }
-        wait_ms(1);  // XXX todo - proper wait, WFE for non-rtos ?
+        _cv_rx.wait();
     }
 
     while (data_read < length && !_rxbuf.empty()) {
@@ -191,7 +197,6 @@ ssize_t UARTSerial::read(void* buffer, size_t length)
         data_read++;
     }
 
-    core_util_critical_section_enter();
     if (!_rx_irq_enabled) {
         UARTSerial::rx_irq();               // only read from hardware in one place
         if (!_rxbuf.full()) {
@@ -209,8 +214,11 @@ bool UARTSerial::hup() const
     return _dcd_irq && _dcd_irq->read() != 0;
 }
 
-void UARTSerial::wake()
+void UARTSerial::wake(ConditionVariableCS *cv)
 {
+    if (cv) {
+        cv->notify_all();
+    }
     if (_sigio_cb) {
         _sigio_cb();
     }
@@ -268,7 +276,7 @@ void UARTSerial::rx_irq(void)
 
     /* Report the File handler that data is ready to be read from the buffer. */
     if (was_empty && !_rxbuf.empty()) {
-        wake();
+        wake(_cv_rx);
     }
 }
 
@@ -292,20 +300,8 @@ void UARTSerial::tx_irq(void)
 
     /* Report the File handler that data can be written to peripheral. */
     if (was_full && !_txbuf.full() && !hup()) {
-        wake();
+        wake(_cv_tx);
     }
-}
-
-void UARTSerial::wait_ms(uint32_t millisec)
-{
-    /* wait_ms implementation for RTOS spins until exact microseconds - we
-     * want to just sleep until next tick.
-     */
-#if MBED_CONF_RTOS_PRESENT
-    rtos::Thread::wait(millisec);
-#else
-    ::wait_ms(millisec);
-#endif
 }
 } //namespace mbed
 

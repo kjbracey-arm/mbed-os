@@ -26,6 +26,7 @@
 #include "InterruptIn.h"
 #include "serial_api.h"
 #include "CircularBuffer.h"
+#include "ConditionVariableCS.h"
 #include "platform/NonCopyable.h"
 
 #ifndef MBED_CONF_DRIVERS_UART_SERIAL_RXBUF_SIZE
@@ -214,8 +215,6 @@ public:
 
 private:
 
-    void wait_ms(uint32_t millisec);
-
     /** SerialBase lock override */
     virtual void lock(void);
 
@@ -227,6 +226,9 @@ private:
      */
     CircularBuffer<char, MBED_CONF_DRIVERS_UART_SERIAL_RXBUF_SIZE> _rxbuf;
     CircularBuffer<char, MBED_CONF_DRIVERS_UART_SERIAL_TXBUF_SIZE> _txbuf;
+
+    ConditionVariableCS _cv_rx;
+    ConditionVariableCS _cv_tx;
 
     Callback<void()> _sigio_cb;
 
@@ -250,7 +252,7 @@ private:
     void tx_irq(void);
     void rx_irq(void);
 
-    void wake(void);
+    void wake(ConditionVariableCS *cv);
 
     void dcd_irq(void);
 
