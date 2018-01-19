@@ -26,6 +26,13 @@
 #include "platform/mbed_wait_api.h"
 #endif
 
+extern "C" {
+int tx_wait_count;
+int tx_wake_count;
+int rx_wait_count;
+int rx_wake_count;
+}
+
 namespace mbed {
 
 UARTSerial::UARTSerial(PinName tx, PinName rx, int baud) :
@@ -152,6 +159,7 @@ ssize_t UARTSerial::write(const void* buffer, size_t length)
                 break;
             }
             do {
+                tx_wait_count++;
                 _cv_tx.wait();
             } while (_txbuf.full());
         }
@@ -190,6 +198,7 @@ ssize_t UARTSerial::read(void* buffer, size_t length)
             core_util_critical_section_exit();
             return -EAGAIN;
         }
+        rx_wait_count++;
         _cv_rx.wait();
     }
 
@@ -292,6 +301,7 @@ void UARTSerial::rx_irq(void)
 
     /* Report the File handler that data is ready to be read from the buffer. */
     if (was_empty && !_rxbuf.empty()) {
+        rx_wake_count++;
         wake(&_cv_rx, POLLIN);
     }
 }
@@ -316,6 +326,7 @@ void UARTSerial::tx_irq(void)
 
     /* Report the File handler that data can be written to peripheral. */
     if (was_full && !_txbuf.full() && !hup()) {
+        tx_wake_count++;
         wake(&_cv_tx, POLLOUT);
     }
 }
