@@ -22,6 +22,11 @@
 #include "rtos/Thread.h"
 #endif
 
+extern "C" {
+int poll_wait_count;
+int poll_wake_count;
+}
+
 namespace mbed {
 
 // This is small enough (1 word) to make efforts to use SingletonPtr or
@@ -77,6 +82,7 @@ int poll(pollfh fhs[], unsigned nfhs, int timeout)
         /* Now we block until something happens (or may have happened) */
         if (all_handles_support_wake) {
             // In critical section. Use ConditionVariableCS to wait.
+            poll_wait_count++;
             bool timed_out;
             if (timeout > 0) {
                 timed_out = wake_cv.wait_until(finish_time);
@@ -122,7 +128,10 @@ int poll(pollfh fhs[], unsigned nfhs, int timeout)
 // involved in a blocking poll.
 void FileHandle::wake_poll(short /*events*/)
 {
+    core_util_critical_section_enter();
     wake_cv.notify_all();
+    poll_wake_count++;
+    core_util_critical_section_exit();
 }
 
 } // namespace mbed
