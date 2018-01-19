@@ -195,7 +195,7 @@ public:
      * The input parameter can be used or ignored - the could always return all events,
      * or could check just the events listed in events.
      * Call is non-blocking - returns instantaneous state of events.
-     * Whenever an event occurs, the derived class should call the sigio() callback).
+     * Whenever an event occurs, the derived class should call the sigio() callback.
      *
      * @param events        bitmask of poll events we're interested in - POLLIN/POLLOUT etc.
      *
@@ -205,6 +205,28 @@ public:
     {
         // Possible default for real files
         return POLLIN | POLLOUT;
+    }
+
+    /** Check for poll event flags
+     * The input parameter can be used or ignored - the could always return all events,
+     * or could check just the events listed in events.
+     * Call is non-blocking - returns instantaneous state of events.
+     * Always called from thread context in a critical section.
+     *
+     * If `wake` is true, and the call does not return any of the specified
+     * events, then the next time any of the specified events occur,
+     * wake_poll() must be called.
+     *
+     * @param events        bitmask of poll events we're interested in - POLLIN/POLLOUT etc.
+     * @param wake          if wake is required for these bits
+     *
+     * @returns             bitmask of poll events that have occurred.
+     * @returns             POLLNVAL if device does not support wake functionality
+     */
+    virtual short poll_with_wake(short events, bool wake)
+    {
+        // Backwards compatibility - pre-existing FileHandles won't support wake
+        return POLLNVAL;
     }
 
     /** Definition depends upon the subclass implementing FileHandle.
@@ -250,6 +272,18 @@ public:
     {
         //Default for real files. Do nothing for real files.
     }
+
+protected:
+    /** Wake up calls to poll()
+     *
+     * Called by derived class when events occur. Must be called in response
+     * to poll_with_wake() - see poll_with_wake for more details.
+     *
+     * Spurious calls are permitted.
+     *
+     * @param events bitmask of poll events that have occurred
+     */
+    void wake_poll(short events);
 };
 
 /** Not a member function
