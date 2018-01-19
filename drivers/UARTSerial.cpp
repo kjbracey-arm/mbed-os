@@ -33,7 +33,8 @@ UARTSerial::UARTSerial(PinName tx, PinName rx, int baud) :
         _blocking(true),
         _tx_irq_enabled(false),
         _rx_irq_enabled(true),
-        _dcd_irq(NULL)
+        _dcd_irq(NULL),
+        _poll_wake_events(0)
 {
     /* Attatch IRQ routines to the serial device. */
     SerialBase::attach(callback(this, &UARTSerial::rx_irq), RxIrq);
@@ -46,7 +47,7 @@ UARTSerial::~UARTSerial()
 
 void UARTSerial::dcd_irq()
 {
-    wake(NULL);
+    wake(NULL, POLLHUP);
 }
 
 void UARTSerial::set_baud(int baud)
@@ -214,11 +215,18 @@ bool UARTSerial::hup() const
     return _dcd_irq && _dcd_irq->read() != 0;
 }
 
-void UARTSerial::wake(ConditionVariableCS *cv)
+void UARTSerial::wake(ConditionVariableCS *cv, short events)
 {
+    /* Unblock our own blocking read or write, depending on cv */
     if (cv) {
         cv->notify_all();
     }
+    /* Unblock poll, if it's in use */
+    if (_poll_wake_events & events) {
+        _poll_wake_events &= ~events;
+        wake_poll(events);
+    }
+    /* Raise SIGIO */
     if (_sigio_cb) {
         _sigio_cb();
     }
@@ -228,7 +236,6 @@ short UARTSerial::poll(short events) const {
 
     short revents = 0;
     /* Check the Circular Buffer if space available for writing out */
-
 
     if (!_rxbuf.empty()) {
         revents |= POLLIN;
@@ -243,6 +250,15 @@ short UARTSerial::poll(short events) const {
 
     /*TODO Handle other event types */
 
+    return revents;
+}
+
+short UARTSerial::poll_with_wake(short events, bool wake)
+{
+    short revents = poll(events);
+    if (wake && !(revents & events)) {
+        _poll_wake_events |= events;
+    }
     return revents;
 }
 
@@ -276,7 +292,7 @@ void UARTSerial::rx_irq(void)
 
     /* Report the File handler that data is ready to be read from the buffer. */
     if (was_empty && !_rxbuf.empty()) {
-        wake(_cv_rx);
+        wake(&_cv_rx, POLLIN);
     }
 }
 
@@ -300,7 +316,7 @@ void UARTSerial::tx_irq(void)
 
     /* Report the File handler that data can be written to peripheral. */
     if (was_full && !_txbuf.full() && !hup()) {
-        wake(_cv_tx);
+        wake(&_cv_tx, POLLOUT);
     }
 }
 } //namespace mbed

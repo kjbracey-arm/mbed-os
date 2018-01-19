@@ -63,6 +63,8 @@ public:
      */
     virtual short poll(short events) const;
 
+    virtual short poll_with_wake(short events, bool wake);
+
     /* Resolve ambiguities versus our private SerialBase
      * (for writable, spelling differs, but just in case)
      */
@@ -236,6 +238,7 @@ private:
     bool _tx_irq_enabled;
     bool _rx_irq_enabled;
     InterruptIn *_dcd_irq;
+    short _poll_wake_events;
 
     /** Device Hanged up
      *  Determines if the device hanged up on us.
@@ -252,7 +255,7 @@ private:
     void tx_irq(void);
     void rx_irq(void);
 
-    void wake(ConditionVariableCS *cv);
+    void wake(ConditionVariableCS *cv, short events);
 
     void dcd_irq(void);
 
