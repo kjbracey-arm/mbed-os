@@ -33,6 +33,13 @@ off_t FileHandle::size()
     return size;
 }
 
+extern "C" {
+int tx_wait_count;
+int tx_wake_count;
+int rx_wait_count;
+int rx_wake_count;
+}
+
 ssize_t FileHandleDeviceWakeHelper::read(void *buffer, size_t size)
 {
     ssize_t amount_read;
@@ -40,6 +47,7 @@ ssize_t FileHandleDeviceWakeHelper::read(void *buffer, size_t size)
     for (;;) {
         amount_read = read_nonblocking(buffer, size);
         if (amount_read == -EAGAIN && is_blocking()) {
+            rx_wait_count++;
             _cv_rx.wait();
         } else {
             // devices return as soon as they have anything
@@ -65,6 +73,7 @@ ssize_t FileHandleDeviceWakeHelper::write(const void *buffer, size_t size)
                 break;
             }
         } else if (n == -EAGAIN && is_blocking()) {
+            tx_wait_count++;
             _cv_tx.wait();
         } else  {
             /* other error - forget total, return error */
@@ -89,9 +98,11 @@ void FileHandleDeviceWakeHelper::wake(short events)
 {
     /* Unblock our own blocking read or write */
     if (events & (POLLIN|POLLERR)) {
+        rx_wake_count++;
          _cv_rx.notify_all();
     }
     if (events & (POLLOUT|POLLHUP|POLLERR)) {
+        tx_wake_count++;
         _cv_tx.notify_all();
     }
     /* Unblock poll, if it's in use */
