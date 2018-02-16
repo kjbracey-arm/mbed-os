@@ -99,7 +99,7 @@ void FileHandleDeviceWakeHelper::wake(short events)
     /* Unblock our own blocking read or write */
     if (events & (POLLIN|POLLERR)) {
         rx_wake_count++;
-         _cv_rx.notify_all();
+        _cv_rx.notify_all();
     }
     if (events & (POLLOUT|POLLHUP|POLLERR)) {
         tx_wake_count++;
