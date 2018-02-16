@@ -26,22 +26,13 @@
 #include "platform/mbed_wait_api.h"
 #endif
 
-extern "C" {
-int tx_wait_count;
-int tx_wake_count;
-int rx_wait_count;
-int rx_wake_count;
-}
-
 namespace mbed {
 
 UARTSerial::UARTSerial(PinName tx, PinName rx, int baud) :
         SerialBase(tx, rx, baud),
-        _blocking(true),
         _tx_irq_enabled(false),
         _rx_irq_enabled(true),
-        _dcd_irq(NULL),
-        _poll_wake_events(0)
+        _dcd_irq(NULL)
 {
     /* Attatch IRQ routines to the serial device. */
     SerialBase::attach(callback(this, &UARTSerial::rx_irq), RxIrq);
@@ -54,7 +45,7 @@ UARTSerial::~UARTSerial()
 
 void UARTSerial::dcd_irq()
 {
-    wake(NULL, POLLHUP);
+    wake(POLLHUP);
 }
 
 void UARTSerial::set_baud(int baud)
@@ -126,19 +117,7 @@ int UARTSerial::sync()
     return 0;
 }
 
-void UARTSerial::sigio(Callback<void()> func) {
-    core_util_critical_section_enter();
-    _sigio_cb = func;
-    if (_sigio_cb) {
-        short current_events = poll(0x7FFF);
-        if (current_events) {
-            _sigio_cb();
-        }
-    }
-    core_util_critical_section_exit();
-}
-
-ssize_t UARTSerial::write(const void* buffer, size_t length)
+ssize_t UARTSerial::write_nonblocking(const void* buffer, size_t length)
 {
     size_t data_written = 0;
     const char *buf_ptr = static_cast<const char *>(buffer);
@@ -149,40 +128,25 @@ ssize_t UARTSerial::write(const void* buffer, size_t length)
 
     core_util_critical_section_enter();
 
-    // Unlike read, we should write the whole thing if blocking. POSIX only
-    // allows partial as a side-effect of signal handling; it normally tries to
-    // write everything if blocking. Without signals we can always write all.
-    while (data_written < length) {
+    while (data_written < length && !_txbuf.full()) {
+        _txbuf.push(*buf_ptr++);
+        data_written++;
+    }
 
-        if (_txbuf.full()) {
-            if (!_blocking) {
-                break;
-            }
-            do {
-                tx_wait_count++;
-                _cv_tx.wait();
-            } while (_txbuf.full());
-        }
-
-        while (data_written < length && !_txbuf.full()) {
-            _txbuf.push(*buf_ptr++);
-            data_written++;
-        }
-
-        if (!_tx_irq_enabled) {
-            UARTSerial::tx_irq();                // only write to hardware in one place
-            if (!_txbuf.empty()) {
-                SerialBase::attach(callback(this, &UARTSerial::tx_irq), TxIrq);
-                _tx_irq_enabled = true;
-            }
+    if (!_tx_irq_enabled) {
+        UARTSerial::tx_irq();                // only write to hardware in one place
+        if (!_txbuf.empty()) {
+            SerialBase::attach(callback(this, &UARTSerial::tx_irq), TxIrq);
+            _tx_irq_enabled = true;
         }
     }
+
     core_util_critical_section_exit();
 
     return data_written != 0 ? (ssize_t) data_written : (ssize_t) -EAGAIN;
 }
 
-ssize_t UARTSerial::read(void* buffer, size_t length)
+ssize_t UARTSerial::read_nonblocking(void* buffer, size_t length)
 {
     size_t data_read = 0;
 
@@ -193,14 +157,6 @@ ssize_t UARTSerial::read(void* buffer, size_t length)
     }
 
     core_util_critical_section_enter();
-    while (_rxbuf.empty()) {
-        if (!_blocking) {
-            core_util_critical_section_exit();
-            return -EAGAIN;
-        }
-        rx_wait_count++;
-        _cv_rx.wait();
-    }
 
     while (data_read < length && !_rxbuf.empty()) {
         _rxbuf.pop(*ptr++);
@@ -216,29 +172,12 @@ ssize_t UARTSerial::read(void* buffer, size_t length)
     }
     core_util_critical_section_exit();
 
-    return data_read;
+    return data_read != 0 ? (ssize_t) data_read : (ssize_t) -EAGAIN;
 }
 
 bool UARTSerial::hup() const
 {
     return _dcd_irq && _dcd_irq->read() != 0;
-}
-
-void UARTSerial::wake(ConditionVariableCS *cv, short events)
-{
-    /* Unblock our own blocking read or write, depending on cv */
-    if (cv) {
-        cv->notify_all();
-    }
-    /* Unblock poll, if it's in use */
-    if (_poll_wake_events & events) {
-        _poll_wake_events &= ~events;
-        wake_poll(events);
-    }
-    /* Raise SIGIO */
-    if (_sigio_cb) {
-        _sigio_cb();
-    }
 }
 
 short UARTSerial::poll(short events) const {
@@ -259,15 +198,6 @@ short UARTSerial::poll(short events) const {
 
     /*TODO Handle other event types */
 
-    return revents;
-}
-
-short UARTSerial::poll_with_wake(short events, bool wake)
-{
-    short revents = poll(events);
-    if (wake && !(revents & events)) {
-        _poll_wake_events |= events;
-    }
     return revents;
 }
 
@@ -301,8 +231,7 @@ void UARTSerial::rx_irq(void)
 
     /* Report the File handler that data is ready to be read from the buffer. */
     if (was_empty && !_rxbuf.empty()) {
-        rx_wake_count++;
-        wake(&_cv_rx, POLLIN);
+        wake(POLLIN);
     }
 }
 
@@ -326,8 +255,7 @@ void UARTSerial::tx_irq(void)
 
     /* Report the File handler that data can be written to peripheral. */
     if (was_full && !_txbuf.full() && !hup()) {
-        tx_wake_count++;
-        wake(&_cv_tx, POLLOUT);
+        wake(POLLOUT);
     }
 }
 } //namespace mbed

@@ -46,7 +46,7 @@ namespace mbed {
  * @ingroup drivers
  */
 
-class UARTSerial : private SerialBase, public FileHandle, private NonCopyable<UARTSerial> {
+class UARTSerial : private SerialBase, public FileHandleDeviceWakeHelper, private NonCopyable<UARTSerial> {
 
 public:
 
@@ -63,41 +63,11 @@ public:
      */
     virtual short poll(short events) const;
 
-    virtual short poll_with_wake(short events, bool wake);
-
     /* Resolve ambiguities versus our private SerialBase
      * (for writable, spelling differs, but just in case)
      */
     using FileHandle::readable;
     using FileHandle::writable;
-
-    /** Write the contents of a buffer to a file
-     *
-     *  Follows POSIX semantics:
-     *
-     * * if blocking, block until all data is written
-     * * if no data can be written, and non-blocking set, return -EAGAIN
-     * * if some data can be written, and non-blocking set, write partial
-     *
-     *  @param buffer   The buffer to write from
-     *  @param length   The number of bytes to write
-     *  @return         The number of bytes written, negative error on failure
-     */
-    virtual ssize_t write(const void* buffer, size_t length);
-
-    /** Read the contents of a file into a buffer
-     *
-     *  Follows POSIX semantics:
-     *
-     *  * if no data is available, and non-blocking set return -EAGAIN
-     *  * if no data is available, and blocking set, wait until data is available
-     *  * If any data is available, call returns immediately
-     *
-     *  @param buffer   The buffer to read in to
-     *  @param length   The number of bytes to read
-     *  @return         The number of bytes read, 0 at end of file, negative error on failure
-     */
-    virtual ssize_t read(void* buffer, size_t length);
 
     /** Close a file
      *
@@ -132,36 +102,6 @@ public:
      *  @return         0 on success, negative error code on failure
      */
     virtual int sync();
-
-    /** Set blocking or non-blocking mode
-     *  The default is blocking.
-     *
-     *  @param blocking true for blocking mode, false for non-blocking mode.
-     */
-    virtual int set_blocking(bool blocking)
-    {
-        _blocking = blocking;
-        return 0;
-    }
-
-    /** Register a callback on state change of the file.
-     *
-     *  The specified callback will be called on state changes such as when
-     *  the file can be written to or read from.
-     *
-     *  The callback may be called in an interrupt context and should not
-     *  perform expensive operations.
-     *
-     *  Note! This is not intended as an attach-like asynchronous api, but rather
-     *  as a building block for constructing  such functionality.
-     *
-     *  The exact timing of when the registered function
-     *  is called is not guaranteed and susceptible to change. It should be used
-     *  as a cue to make read/write/poll calls to find the current state.
-     *
-     *  @param func     Function to call on state change
-     */
-    virtual void sigio(Callback<void()> func);
 
     /** Setup interrupt handler for DCD line
      *
@@ -215,6 +155,37 @@ public:
     void set_flow_control(Flow type, PinName flow1=NC, PinName flow2=NC);
 #endif
 
+protected:
+    /** Read the contents of a file into a buffer
+     *
+     *  Devices acting as FileHandles should follow POSIX semantics, in their
+     *  non-blocking form here. FileHandleBlockingHelper will provide blocking
+     *  semantics for FileHandle::read() based on this method.
+     *
+     *  * If no data is available, return -EAGAIN
+     *  * If any data is available, call returns immediately
+     *
+     *  @param buffer   The buffer to read in to
+     *  @param size     The number of bytes to read
+     *  @return         The number of bytes read, 0 at end of file, negative error on failure
+     */
+    virtual int read_nonblocking(void *buffer, size_t size);
+
+    /** Write the contents of a buffer to a file
+     *
+     *  Devices acting as FileHandles should follow POSIX semantics, in their
+     *  non-blocking form here. FileHandleBlockingHelper will provide blocking
+     *  semantics for FileHandle::write() based on this method.
+     *
+     * * if no data can be written return -EAGAIN
+     * * if some data can be written, write as much as possible and return immediately
+     *
+     *  @param buffer   The buffer to write from
+     *  @param size     The number of bytes to write
+     *  @return         The number of bytes written, negative error on failure
+     */
+    virtual ssize_t write_nonblocking(const void *buffer, size_t size);
+
 private:
 
     /** SerialBase lock override */
@@ -229,16 +200,9 @@ private:
     CircularBuffer<char, MBED_CONF_DRIVERS_UART_SERIAL_RXBUF_SIZE> _rxbuf;
     CircularBuffer<char, MBED_CONF_DRIVERS_UART_SERIAL_TXBUF_SIZE> _txbuf;
 
-    ConditionVariableCS _cv_rx;
-    ConditionVariableCS _cv_tx;
-
-    Callback<void()> _sigio_cb;
-
-    bool _blocking;
     bool _tx_irq_enabled;
     bool _rx_irq_enabled;
     InterruptIn *_dcd_irq;
-    short _poll_wake_events;
 
     /** Device Hanged up
      *  Determines if the device hanged up on us.
@@ -254,8 +218,6 @@ private:
      */
     void tx_irq(void);
     void rx_irq(void);
-
-    void wake(ConditionVariableCS *cv, short events);
 
     void dcd_irq(void);
 
