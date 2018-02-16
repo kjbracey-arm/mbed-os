@@ -23,6 +23,7 @@ typedef int FILEHANDLE;
 #include "platform/mbed_poll.h"
 #include "platform/platform.h"
 #include "platform/NonCopyable.h"
+#include "platform/ConditionVariableCS.h"
 
 namespace mbed {
 /** \addtogroup platform */
@@ -274,6 +275,180 @@ public:
     }
 
 protected:
+    /** Wake up calls to poll()
+     *
+     * Called by derived class when events occur. Must be called in response
+     * to poll_with_wake() - see poll_with_wake for more details.
+     *
+     * Spurious calls are permitted.
+     *
+     * @param events bitmask of poll events that have occurred
+     */
+    void wake_poll(short events);
+};
+
+/** Class FileHandleDeviceWakeHelper
+ *
+ *  This class acts as a helper to implement wake and blocking functionality on top
+ *  of an underlying device implementation that is natively non-blocking.
+ */
+class FileHandleDeviceWakeHelper : public FileHandle {
+public:
+    /** Read the contents of a file into a buffer
+     *
+     *  Devices acting as FileHandles should follow POSIX semantics:
+     *
+     *  * if no data is available, and non-blocking set return -EAGAIN
+     *  * if no data is available, and blocking set, wait until some data is available
+     *  * If any data is available, call returns immediately
+     *
+     *  @param buffer   The buffer to read in to
+     *  @param size     The number of bytes to read
+     *  @return         The number of bytes read, 0 at end of file, negative error on failure
+     */
+    virtual ssize_t read(void *buffer, size_t size);
+
+    /** Write the contents of a buffer to a file
+     *
+     *  Devices acting as FileHandles should follow POSIX semantics:
+     *
+     * * if blocking, block until all data is written
+     * * if no data can be written, and non-blocking set, return -EAGAIN
+     * * if some data can be written, and non-blocking set, write partial
+     *
+     *  @param buffer   The buffer to write from
+     *  @param size     The number of bytes to write
+     *  @return         The number of bytes written, negative error on failure
+     */
+    virtual ssize_t write(const void *buffer, size_t size);
+
+    virtual int set_blocking(bool blocking) { _blocking = blocking; return 0; }
+
+    /** Check for poll event flags
+     * The input parameter can be used or ignored - the could always return all events,
+     * or could check just the events listed in events.
+     * Call is non-blocking - returns instantaneous state of events.
+     *
+     * Classes derived from FileHandleDeviceWakeHelper must implement poll(),
+     * and must call wake() whenever any event occurs.
+     *
+     * @param events        bitmask of poll events we're interested in - POLLIN/POLLOUT etc.
+     *
+     * @returns             bitmask of poll events that have occurred.
+     */
+    virtual short poll(short events) const  = 0;
+
+    /** Check for poll event flags
+     * The input parameter can be used or ignored - the could always return all events,
+     * or could check just the events listed in events.
+     * Call is non-blocking - returns instantaneous state of events.
+     * Always called from thread context in a critical section.
+     *
+     * If `wake` is true, and the call does not return any of the specified
+     * events, then the next time any of the specified events occur,
+     * wake_poll() must be called.
+     *
+     * @param events        bitmask of poll events we're interested in - POLLIN/POLLOUT etc.
+     * @param wake          if wake is required for these bits
+     *
+     * @returns             bitmask of poll events that have occurred.
+     * @returns             POLLNVAL if device does not support wake functionality
+     */
+    virtual short poll_with_wake(short events, bool wake);
+
+    /** Register a callback on state change of the file.
+     *
+     *  The specified callback will be called on state changes such as when
+     *  the file can be written to or read from.
+     *
+     *  The callback may be called in an interrupt context and should not
+     *  perform expensive operations.
+     *
+     *  Note! This is not intended as an attach-like asynchronous api, but rather
+     *  as a building block for constructing  such functionality.
+     *
+     *  The exact timing of when the registered function
+     *  is called is not guaranteed and susceptible to change. It should be used
+     *  as a cue to make read/write/poll calls to find the current state.
+     *
+     *  @param func     Function to call on state change
+     */
+    virtual void sigio(Callback<void()> func);
+
+protected:
+    FileHandleDeviceWakeHelper() : _blocking(true), _poll_wake_events(0) { }
+
+    bool is_blocking() const { return _blocking; }
+
+    /** Indicate whether datagram or stream semantics are required.
+     *
+     * Behaviour for write differs for datagrams and streams. For a stream,
+     * blocking write may make multiple successful calls to write_nonblocking,
+     * summing the return values, until the total amount has been written. For a
+     * datagram, blocking write will only one successful call to write_nonblocking,
+     * returning its value.
+     *
+     * Read behaviour is the same in both cases - blocking read will make only
+     * one successful call to read_nonblocking, as read() is required to
+     * return immediately as soon as any data is available for a device.
+     *
+     * @returns        true for stream semantics
+     *                 false for datagram semantics
+     */
+    bool is_stream() const = 0;
+
+    /** Read the contents of a file into a buffer
+     *
+     *  Devices acting as FileHandles should follow POSIX semantics, in their
+     *  non-blocking form here. FileHandleBlockingHelper will provide blocking
+     *  semantics for FileHandle::read() based on this method.
+     *
+     *  * If no data is available, return -EAGAIN
+     *  * If any data is available, call returns immediately
+     *
+     *  @param buffer   The buffer to read in to
+     *  @param size     The number of bytes to read
+     *  @return         The number of bytes read, 0 at end of file, negative error on failure
+     */
+    virtual int read_nonblocking(void *buffer, size_t size) = 0;
+
+    /** Write the contents of a buffer to a file
+     *
+     *  Devices acting as FileHandles should follow POSIX semantics, in their
+     *  non-blocking form here. FileHandleBlockingHelper will provide blocking
+     *  semantics for FileHandle::write() based on this method.
+     *
+     * * if no data can be written return -EAGAIN
+     * * if some data can be written, write as much as possible and return immediately
+     *
+     *  @param buffer   The buffer to write from
+     *  @param size     The number of bytes to write
+     *  @return         The number of bytes written, negative error on failure
+     */
+    virtual ssize_t write_nonblocking(const void *buffer, size_t size) = 0;
+
+    /** Wake up on events
+     *
+     * This must be called by the derived class when events occur. It must
+     * occur on all events, and is used by FileHandleBlockingDeviceHelper to
+     * implement blocking reads and writes, poll_with_wake and sigio callbacks.
+     *
+     * Blocking reads will wake on POLLIN or POLLERR. Blocking writes will
+     * wake on POLLOUT, POLLHUP or POLLERR.
+     *
+     * Spurious calls are permitted.
+     *
+     * @param events bitmask of poll events that have occurred
+     */
+    void wake(short events) = 0;
+
+private:
+    bool _blocking;
+    short _poll_wake_events;
+    ConditionVariableCS _cv_rx;
+    ConditionVariableCS _cv_tx;
+    Callback<void()> _sigio_cb;
+
     /** Wake up calls to poll()
      *
      * Called by derived class when events occur. Must be called in response
