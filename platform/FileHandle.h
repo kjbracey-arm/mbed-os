@@ -332,6 +332,10 @@ public:
      * Classes derived from FileHandleDeviceWakeHelper must implement poll(),
      * and must call wake() whenever any event occurs.
      *
+     * This is used to implement both FileHandle::poll and FileHandle::poll_with_wake,
+     * so will be called from thread context, and may or may not be in a
+     * critical section.
+     *
      * @param events        bitmask of poll events we're interested in - POLLIN/POLLOUT etc.
      *
      * @returns             bitmask of poll events that have occurred.
@@ -395,7 +399,7 @@ protected:
      * @returns        true for stream semantics
      *                 false for datagram semantics
      */
-    bool is_stream() const = 0;
+    virtual bool is_stream() const = 0;
 
     /** Read the contents of a file into a buffer
      *
@@ -440,7 +444,7 @@ protected:
      *
      * @param events bitmask of poll events that have occurred
      */
-    void wake(short events) = 0;
+    void wake(short events);
 
 private:
     bool _blocking;
@@ -448,17 +452,6 @@ private:
     ConditionVariableCS _cv_rx;
     ConditionVariableCS _cv_tx;
     Callback<void()> _sigio_cb;
-
-    /** Wake up calls to poll()
-     *
-     * Called by derived class when events occur. Must be called in response
-     * to poll_with_wake() - see poll_with_wake for more details.
-     *
-     * Spurious calls are permitted.
-     *
-     * @param events bitmask of poll events that have occurred
-     */
-    void wake_poll(short events);
 };
 
 /** Not a member function

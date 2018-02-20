@@ -61,15 +61,15 @@ ssize_t FileHandleDeviceWakeHelper::read(void *buffer, size_t size)
 ssize_t FileHandleDeviceWakeHelper::write(const void *buffer, size_t size)
 {
     ssize_t amount_written = 0;
-    char *ptr = static_cast<const char *>(buffer);
+    const char *ptr = static_cast<const char *>(buffer);
 
     for (;;) {
         ssize_t n = write_nonblocking(ptr, size - amount_written);
         if (n >= 0) {
-            MBED_ASSERT(n <= size - amount_written);
+            MBED_ASSERT(n <= (ssize_t) size - amount_written);
             ptr += n;
             amount_written += n;
-            if (amount_written >= size || !is_stream()) {
+            if (amount_written >= (ssize_t) size || !is_stream()) {
                 break;
             }
         } else if (n == -EAGAIN && is_blocking()) {
