@@ -109,12 +109,20 @@ int UARTSerial::sync()
     core_util_critical_section_enter();
     while (!_txbuf.empty()) {
         // We don't actually currently notify _cv_tx on empty, so use a timeout.
-        // (And may as well still use the CV code we have anyway...)
-        _cv_tx.wait_for(1);
+#if MBED_CONF_RTOS_PRESENT
+        rtos::Thread::wait(1);
+#else
+        wait_ms(1);
+#endif
     }
     core_util_critical_section_exit();
 
     return 0;
+}
+
+bool UARTSerial::is_stream() const
+{
+    return true;
 }
 
 ssize_t UARTSerial::write_nonblocking(const void* buffer, size_t length)

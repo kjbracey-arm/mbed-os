@@ -68,6 +68,8 @@ public:
      */
     using FileHandle::readable;
     using FileHandle::writable;
+    using FileHandleDeviceWakeHelper::read;
+    using FileHandleDeviceWakeHelper::write;
 
     /** Close a file
      *
@@ -185,6 +187,8 @@ protected:
      *  @return         The number of bytes written, negative error on failure
      */
     virtual ssize_t write_nonblocking(const void *buffer, size_t size);
+
+    virtual bool is_stream() const;
 
 private:
 
