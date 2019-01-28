@@ -30,7 +30,7 @@
 void wait(float s)
 {
     if ((s >= 0.01f)  && core_util_are_interrupts_enabled()) {
-        wait_ms(s * 1000.0f);
+        rtos::ThisThread::sleep_for(s * 1000.0f);
         return;
     }
 
@@ -68,7 +68,7 @@ void wait_us(int us)
 {
     if (us > 10000) {
         MBED_WARNING(MBED_MAKE_ERROR(MBED_MODULE_PLATFORM, MBED_ERROR_UNKNOWN),
-                     "wait_us blocks deep sleep, wait_ms recommended for long delays\n");
+                     "wait_us blocks sleep, ThisThread::sleep_for required for long delays\n");
     }
     const ticker_data_t *const ticker = get_us_ticker_data();
     uint32_t start = ticker_read(ticker);
