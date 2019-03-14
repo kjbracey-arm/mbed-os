@@ -23,10 +23,9 @@
 #define SEMAPHORE_H
 
 #include <stdint.h>
-#include "cmsis_os2.h"
-#include "mbed_rtos1_types.h"
-#include "mbed_rtos_storage.h"
-#include "platform/mbed_toolchain.h"
+#include "rtos/mbed_rtos_types.h"
+#include "rtos/mbed_rtos1_types.h"
+#include "rtos/mbed_rtos_storage.h"
 #include "platform/NonCopyable.h"
 
 namespace rtos {
@@ -141,10 +140,16 @@ public:
 private:
     void constructor(int32_t count, uint16_t max_count);
 
+#if MBED_CONF_RTOS_PRESENT
     int32_t _wait(uint32_t millisec);
 
     osSemaphoreId_t               _id;
     mbed_rtos_storage_semaphore_t _obj_mem;
+#else
+    static bool semaphore_available(void *);
+    int32_t _count;
+    uint16_t _max_count;
+#endif
 };
 /** @}*/
 /** @}*/
