@@ -144,6 +144,12 @@ void do_sleep_operation(OpT &op)
     // We assume the ticker is not already in use - without RTOS, it
     // is never used, with RTOS, it will have been disabled with OS_Tick_Disable
     while (!op.wake_condition()) {
+        // Explicitly ping mbed_override_sleep_hook as otherwise mbed_override_sleep_hook
+        // won't trigger in the following critical section
+        if (core_util_are_interrupts_enabled()) {
+            mbed_override_sleep_hook();
+        }
+
         // Set (or re-set) the wake time - outside a critical section, as
         // it could take long enough to cause UART data loss on some platforms.
         op.sleep_prepare();
