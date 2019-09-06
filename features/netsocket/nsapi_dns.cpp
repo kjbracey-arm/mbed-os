@@ -67,7 +67,7 @@ enum dns_state {
 
 struct DNS_QUERY {
     int unique_id;
-    nsapi_error_t status;
+    nsapi_error_t status = NSAPI_ERROR_TIMEOUT;
     NetworkStack *stack;
     mstd::unique_ptr<char[]> host;
     const char *interface_name;
@@ -75,19 +75,19 @@ struct DNS_QUERY {
     call_in_callback_cb_t call_in_cb;
     nsapi_size_t addr_count;
     nsapi_version_t version;
-    UDPSocket *socket;
+    UDPSocket *socket = nullptr;
     SOCKET_CB_DATA *socket_cb_data;
     mstd::unique_ptr<nsapi_addr_t[]> addrs;
     uint32_t ttl;
-    uint32_t total_timeout;
-    uint32_t socket_timeout;
-    uint16_t dns_message_id;
-    uint8_t dns_server;
-    uint8_t retries;
-    uint8_t total_attempts;
-    uint8_t send_success;
-    uint8_t count;
-    dns_state state;
+    uint32_t total_timeout = MBED_CONF_NSAPI_DNS_TOTAL_ATTEMPTS * MBED_CONF_NSAPI_DNS_RESPONSE_WAIT_TIME + 500;
+    uint32_t socket_timeout = 0;
+    uint16_t dns_message_id = 0;
+    uint8_t dns_server = 0;
+    uint8_t retries = MBED_CONF_NSAPI_DNS_RETRIES + 1;
+    uint8_t total_attempts = MBED_CONF_NSAPI_DNS_TOTAL_ATTEMPTS;
+    uint8_t send_success = 0;
+    uint8_t count = 0;
+    dns_state state = DNS_CREATED;
 };
 
 static void nsapi_dns_cache_add(const char *host, nsapi_addr_t *address, uint32_t ttl);
@@ -718,23 +718,11 @@ nsapi_value_or_error_t nsapi_dns_query_multiple_async(NetworkStack *stack, const
         return NSAPI_ERROR_NO_MEMORY;
     }
     strcpy(query->host.get(), host);
-    query->status = NSAPI_ERROR_TIMEOUT;
     query->callback = callback;
     query->call_in_cb = call_in_cb;
     query->stack = stack;
     query->addr_count = addr_count;
     query->version = version;
-    query->socket = NULL;
-    query->socket_cb_data = NULL;
-    query->dns_server = 0;
-    query->retries = MBED_CONF_NSAPI_DNS_RETRIES + 1;
-    query->total_attempts =  MBED_CONF_NSAPI_DNS_TOTAL_ATTEMPTS;
-    query->send_success = 0;
-    query->dns_message_id = 0;
-    query->socket_timeout = 0;
-    query->total_timeout = MBED_CONF_NSAPI_DNS_TOTAL_ATTEMPTS * MBED_CONF_NSAPI_DNS_RESPONSE_WAIT_TIME + 500;
-    query->count = 0;
-    query->state = DNS_CREATED;
     query->interface_name = interface_name;
     int unique_id = dns_unique_id++;
     if (unique_id > 0x7FFF) {
