@@ -25,12 +25,12 @@
 #include <stdio.h>
 #include <mstd_array>
 #include <mstd_memory>
+#include <mstd_mutex>
 #include <mstd_algorithm>
 #include "mbed_shared_queues.h"
 #include "events/EventQueue.h"
 #include "OnboardNetworkStack.h"
 #include "Kernel.h"
-#include "PlatformMutex.h"
 #include "SingletonPtr.h"
 
 #define CLASS_IN 1
@@ -121,14 +121,14 @@ static nsapi_addr_t dns_servers[DNS_SERVERS_SIZE] = {
 #if (MBED_CONF_NSAPI_DNS_CACHE_SIZE > 0)
 static mstd::array<mstd::unique_ptr<DNS_CACHE>, MBED_CONF_NSAPI_DNS_CACHE_SIZE> dns_cache;
 // Protects cache shared between blocking and asynchronous calls
-static SingletonPtr<PlatformMutex> dns_cache_mutex;
+static mstd::mutex dns_cache_mutex;
 #endif
 
 static uint16_t dns_message_id = 1;
 static int dns_unique_id = 1;
 static mstd::array<mstd::unique_ptr<DNS_QUERY>, DNS_QUERY_QUEUE_SIZE> dns_query_queue;
 // Protects from several threads running asynchronous DNS
-static SingletonPtr<PlatformMutex> dns_mutex;
+static mstd::recursive_mutex dns_mutex;
 static SingletonPtr<call_in_callback_cb_t> dns_call_in;
 static bool dns_timer_running = false;
 
@@ -334,7 +334,7 @@ static void nsapi_dns_cache_add(const char *host, nsapi_addr_t *address, uint32_
         return;
     }
 
-    dns_cache_mutex->lock();
+    mstd::scoped_lock<mstd::mutex> cache_lock(dns_cache_mutex);
 
     uint64_t accessed = UINT64_MAX;
 
@@ -351,7 +351,6 @@ static void nsapi_dns_cache_add(const char *host, nsapi_addr_t *address, uint32_
     }
 
     if (!cache_entry_ptr) {
-        dns_cache_mutex->unlock();
         return;
     }
 
@@ -374,8 +373,6 @@ static void nsapi_dns_cache_add(const char *host, nsapi_addr_t *address, uint32_
         cache_entry->expires = ms_count + (uint64_t) ttl * 1000;
         cache_entry->accessed = ms_count;
     }
-
-    dns_cache_mutex->unlock();
 #endif
 }
 
@@ -384,7 +381,7 @@ static nsapi_error_t nsapi_dns_cache_find(const char *host, nsapi_version_t vers
     nsapi_error_t ret_val = NSAPI_ERROR_NO_ADDRESS;
 
 #if (MBED_CONF_NSAPI_DNS_CACHE_SIZE > 0)
-    dns_cache_mutex->lock();
+    mstd::scoped_lock<mstd::mutex> cache_lock(dns_cache_mutex);
 
     for (auto &&cache_entry : dns_cache) {
         if (cache_entry) {
@@ -402,8 +399,6 @@ static nsapi_error_t nsapi_dns_cache_find(const char *host, nsapi_version_t vers
             }
         }
     }
-
-    dns_cache_mutex->unlock();
 #endif
 
     return ret_val;
@@ -412,15 +407,13 @@ static nsapi_error_t nsapi_dns_cache_find(const char *host, nsapi_version_t vers
 static void nsapi_dns_cache_reset()
 {
 #if (MBED_CONF_NSAPI_DNS_CACHE_SIZE > 0)
-    dns_cache_mutex->lock();
+    mstd::scoped_lock<mstd::mutex> cache_lock(dns_cache_mutex);
 
     //std::fill(std::begin(dns_cache), std::end(dns_cache), nullptr);
     for (auto &&cache_entry : dns_cache) {
         cache_entry = nullptr;
         //cache_entry.reset();
     }
-
-    dns_cache_mutex->unlock();
 #endif
 }
 
@@ -679,7 +672,7 @@ nsapi_value_or_error_t nsapi_dns_query_multiple_async(NetworkStack *stack, const
                                                       NetworkStack::hostbyname_cb_t callback, nsapi_size_t addr_count,
                                                       call_in_callback_cb_t call_in_cb, const char *interface_name, nsapi_version_t version)
 {
-    dns_mutex->lock();
+    dns_mutex.lock();
 
     if (!stack) {
         return NSAPI_ERROR_PARAMETER;
@@ -688,33 +681,33 @@ nsapi_value_or_error_t nsapi_dns_query_multiple_async(NetworkStack *stack, const
     // check for valid host name
     int host_len = host ? strlen(host) : 0;
     if (host_len > DNS_HOST_NAME_MAX_LEN || host_len == 0) {
-        dns_mutex->unlock();
+        dns_mutex.unlock();
         return NSAPI_ERROR_PARAMETER;
     }
 
     nsapi_addr address;
     if (nsapi_dns_cache_find(host, version, &address) == NSAPI_ERROR_OK) {
         SocketAddress addr(address);
-        dns_mutex->unlock();
+        dns_mutex.unlock();
         callback(NSAPI_ERROR_OK, &addr);
         return NSAPI_ERROR_OK;
     }
 
     mstd::unique_ptr<DNS_QUERY> *free_query_entry_ptr = mstd::find(dns_query_queue.begin(), dns_query_queue.end(), nullptr);
     if (!free_query_entry_ptr) {
-        dns_mutex->unlock();
+        dns_mutex.unlock();
         return NSAPI_ERROR_NO_MEMORY;
     }
 
     mstd::unique_ptr<DNS_QUERY> query(new (std::nothrow) DNS_QUERY);
     if (!query) {
-        dns_mutex->unlock();
+        dns_mutex.unlock();
         return NSAPI_ERROR_NO_MEMORY;
     }
 
     query->host.reset(new (std::nothrow) char[host_len + 1]);
     if (!query->host) {
-        dns_mutex->unlock();
+        dns_mutex.unlock();
         return NSAPI_ERROR_NO_MEMORY;
     }
     strcpy(query->host.get(), host);
@@ -749,7 +742,7 @@ nsapi_value_or_error_t nsapi_dns_query_multiple_async(NetworkStack *stack, const
     if (!dns_timer_running) {
         if (nsapi_dns_call_in(call_in_cb, DNS_TIMER_TIMEOUT, mbed::callback(nsapi_dns_query_async_timeout)) != NSAPI_ERROR_OK) {
             *free_query_entry_ptr = nullptr;
-            dns_mutex->unlock();
+            dns_mutex.unlock();
             return NSAPI_ERROR_NO_MEMORY;
         }
         dns_timer_running = true;
@@ -758,7 +751,7 @@ nsapi_value_or_error_t nsapi_dns_query_multiple_async(NetworkStack *stack, const
     // Initiates query
     nsapi_dns_query_async_initiate_next();
 
-    dns_mutex->unlock();
+    dns_mutex.unlock();
 
     return unique_id;
 }
@@ -792,7 +785,7 @@ static void nsapi_dns_query_async_initiate_next(void)
 
 static void nsapi_dns_query_async_timeout(void)
 {
-    dns_mutex->lock();
+    mstd::scoped_lock<mstd::recursive_mutex> dns_lock(dns_mutex);
 
     DNS_QUERY *query = nullptr;
 
@@ -838,17 +831,14 @@ static void nsapi_dns_query_async_timeout(void)
     } else {
         dns_timer_running = false;
     }
-
-    dns_mutex->unlock();
 }
 
 nsapi_error_t nsapi_dns_query_async_cancel(int id)
 {
-    dns_mutex->lock();
+    mstd::scoped_lock<mstd::recursive_mutex> dns_lock(dns_mutex);
 
     DNS_QUERY *query = nsapi_dns_query_find_by_id(id);
     if (!query || query->state == DNS_CANCELLED) {
-        dns_mutex->unlock();
         return NSAPI_ERROR_PARAMETER;
     }
 
@@ -857,21 +847,19 @@ nsapi_error_t nsapi_dns_query_async_cancel(int id)
     // Do not call callback
     query->callback = 0;
 
-    dns_mutex->unlock();
-
     return NSAPI_ERROR_OK;
 }
 
 static void nsapi_dns_query_async_create(void *ptr)
 {
-    dns_mutex->lock();
+    dns_mutex.lock();
 
     int unique_id = reinterpret_cast<int>(ptr);
 
     DNS_QUERY *query = nsapi_dns_query_find_by_id(unique_id);
     if (!query || query->state == DNS_CANCELLED) {
         // Cancel has been called
-        dns_mutex->unlock();
+        dns_mutex.unlock();
         return;
     }
 
@@ -918,7 +906,7 @@ static void nsapi_dns_query_async_create(void *ptr)
         query->socket = socket;
     }
 
-    dns_mutex->unlock();
+    dns_mutex.unlock();
 
     nsapi_dns_query_async_send(reinterpret_cast<void *>(query->unique_id));
 }
@@ -959,7 +947,7 @@ static void nsapi_dns_query_async_resp(DNS_QUERY *query, nsapi_error_t status, S
     nsapi_dns_query_async_delete(query->unique_id);
     nsapi_dns_query_async_initiate_next();
 
-    dns_mutex->unlock();
+    dns_mutex.unlock();
 
     if (callback) {
         callback(status, address);
@@ -968,14 +956,14 @@ static void nsapi_dns_query_async_resp(DNS_QUERY *query, nsapi_error_t status, S
 
 static void nsapi_dns_query_async_send(void *ptr)
 {
-    dns_mutex->lock();
+    dns_mutex.lock();
 
     int unique_id = reinterpret_cast<int>(ptr);
 
     DNS_QUERY *query = nsapi_dns_query_find_by_id(unique_id);
     if (!query || query->state != DNS_INITIATED) {
         // Cancel has been called
-        dns_mutex->unlock();
+        dns_mutex.unlock();
         return;
     }
 
@@ -1014,7 +1002,7 @@ static void nsapi_dns_query_async_send(void *ptr)
         if (err < 0) {
             if (err == NSAPI_ERROR_WOULD_BLOCK) {
                 nsapi_dns_call_in(query->call_in_cb, DNS_TIMER_TIMEOUT, mbed::callback(nsapi_dns_query_async_send, ptr));
-                dns_mutex->unlock();
+                dns_mutex.unlock();
                 return; // Timeout handler will retry the connection if possible
             } else {
                 query->dns_server++;
@@ -1032,7 +1020,7 @@ static void nsapi_dns_query_async_send(void *ptr)
 
     query->socket_timeout = MBED_CONF_NSAPI_DNS_RESPONSE_WAIT_TIME;
 
-    dns_mutex->unlock();
+    dns_mutex.unlock();
 }
 
 static void nsapi_dns_query_async_socket_callback(void *ptr)
@@ -1048,7 +1036,7 @@ static void nsapi_dns_query_async_socket_callback_handle(NetworkStack *stack)
 {
     UDPSocket *socket = nullptr;
 
-    dns_mutex->lock();
+    mstd::scoped_lock<mstd::recursive_mutex> dns_lock(dns_mutex);
 
     for (auto &&query_entry : dns_query_queue) {
         if (query_entry && query_entry->stack == stack) {
@@ -1061,7 +1049,6 @@ static void nsapi_dns_query_async_socket_callback_handle(NetworkStack *stack)
         // create network packet
         mstd::unique_ptr<uint8_t[]> packet(new (std::nothrow) uint8_t[DNS_BUFFER_SIZE]);
         if (!packet) {
-            dns_mutex->unlock();
             return;
         }
 
@@ -1109,13 +1096,11 @@ static void nsapi_dns_query_async_socket_callback_handle(NetworkStack *stack)
             }
         }
     }
-
-    dns_mutex->unlock();
 }
 
 static void nsapi_dns_query_async_response(void *ptr)
 {
-    dns_mutex->lock();
+    dns_mutex.lock();
 
     int unique_id = reinterpret_cast<int>(ptr);
 
@@ -1145,6 +1130,6 @@ static void nsapi_dns_query_async_response(void *ptr)
 
         nsapi_dns_query_async_resp(query, status, addresses.get());
     } else {
-        dns_mutex->unlock();
+        dns_mutex.unlock();
     }
 }
