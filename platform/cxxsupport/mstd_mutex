@@ -23,12 +23,11 @@
  * - For toolchains not providing them, local implementation of C++11/14 equivalent features:
  *   - mstd::defer_lock etc
  *   - mstd::lock_guard
+ * - For all toolchains, local implementations:
  *   - mstd::unique_lock
  *   - mstd::lock
  *   - mstd::try_lock
- * - If not available, local version of:
  *   - mstd::scoped_lock (C++17)
- * - For all toolchains, local implementations:
  *   - mstd::call_once, mstd::once_flag
  *   - mstd::mutex, mstd::recursive_mutex
  *
@@ -46,6 +45,7 @@
 
 #include <mstd_utility>
 #include <mstd_functional>
+#include <mstd_tuple>
 
 #include "mbed_atomic.h"
 #include "mbed_assert.h"
@@ -67,9 +67,6 @@ using std::adopt_lock;
 using std::adopt_lock_t;
 
 using std::lock_guard;
-using std::unique_lock;
-using std::try_lock;
-using std::lock;
 #else
 // [thread.lock]
 struct defer_lock_t { };
@@ -92,7 +89,11 @@ public:
     lock_guard(const lock_guard &) = delete;
     lock_guard &operator=(const lock_guard &) = delete;
 };
+#endif
 
+// GCC's unique_lock ends up pulling in lots of exception code.
+// ARMC6's appears not to, but that in turn means we probably don't get any traps for bad behaviour.
+// Therefore always use a local implementation which does MBED_ASSERT for the failure case.
 
 // [thread.lock.unique]
 template<class Mutex>
@@ -304,17 +305,10 @@ void lock(L1 &l1, L2 &l2, L3 &l3, LN &... ln)
     impl::lock_from(1, l1, l2, l3, ln...);
 }
 
-#endif
-
-
-#if __cpp_lib_scoped_lock >= 201703
-using std::scoped_lock;
-#else
 // [thread.lock.scoped]
 // 2+ locks - use std::lock
 template <class... MutexTypes>
-class scoped_lock
-#if 0 // no definition yet - needs tuple
+class scoped_lock {
     tuple<MutexTypes &...> pm;
     static void ignore(...) { }
 public:
@@ -324,10 +318,7 @@ public:
 
     scoped_lock(const scoped_lock &) = delete;
     scoped_lock &operator=(const scoped_lock &) = delete;
-}
-#else
-;
-#endif
+};
 
 // 0 locks - no-op
 template <>
@@ -354,7 +345,6 @@ public:
     scoped_lock(const scoped_lock &) = delete;
     scoped_lock &operator=(const scoped_lock &) = delete;
 };
-#endif
 
 // [thread.once.onceflag]
 // Always local implementation - need to investigate GCC + ARMC6 retargetting
