@@ -76,7 +76,7 @@ const ptrdiff_t SPAN_DYNAMIC_EXTENT = -1;
  *   - span<uint8_t>: span over an arbitrary long sequence.
  *
  * When the size is encoded in the type itself, it is guaranteed that the span
- * view is a valid sequence (not empty() and not NULL) - unless Extent equals 0.
+ * view is a valid sequence (not empty() and not nullptr) - unless Extent equals 0.
  * The type system also prevents automatic conversion from span of different
  * sizes. Finally, the span object is internally represented as a single pointer.
  *
@@ -94,7 +94,7 @@ const ptrdiff_t SPAN_DYNAMIC_EXTENT = -1;
     void process_mac(mac_address_t);
 
     // compile just fine
-    uint8_t *invalid_value = NULL;
+    uint8_t *invalid_value = nullptr;
     process_mac(invalid_value);
 
 
@@ -103,7 +103,7 @@ const ptrdiff_t SPAN_DYNAMIC_EXTENT = -1;
     void process_mac(mac_address_t);
 
     // compilation error
-    uint8_t *invalid_value = NULL;
+    uint8_t *invalid_value = nullptr;
     process_mac(invalid_value);
 
     // compilation ok
@@ -128,7 +128,7 @@ const ptrdiff_t SPAN_DYNAMIC_EXTENT = -1;
     {
        parsed_value_t parsed_value { 0 };
 
-       if (buffer != NULL && buffer_size <= MINIMAL_BUFFER_SIZE) {
+       if (buffer != nullptr && buffer_size <= MINIMAL_BUFFER_SIZE) {
            return parsed_value;
        }
 
@@ -220,13 +220,13 @@ struct span {
     /**
      * Construct an empty span.
      *
-     * @post a call to size() returns 0, and data() returns NULL.
+     * @post a call to size() returns 0, and data() returns nullptr.
      *
      * @note This function is not accessible if Extent != SPAN_DYNAMIC_EXTENT or
      * Extent != 0 .
      */
     span() :
-        _data(NULL)
+        _data(nullptr)
     {
         static_assert(
             Extent == 0,
@@ -250,7 +250,7 @@ struct span {
         _data(ptr)
     {
         MBED_ASSERT(count == Extent);
-        MBED_ASSERT(Extent == 0 || ptr != NULL);
+        MBED_ASSERT(Extent == 0 || ptr != nullptr);
     }
 
     /**
@@ -270,7 +270,7 @@ struct span {
     {
         MBED_ASSERT(first <= last);
         MBED_ASSERT((last - first) == Extent);
-        MBED_ASSERT(Extent == 0 || first != NULL);
+        MBED_ASSERT(Extent == 0 || first != nullptr);
     }
 
     // AStyle ignore, not handling correctly below
@@ -344,7 +344,7 @@ struct span {
     }
 
     /**
-     * Return a pointer to the first element of the sequence or NULL if the span
+     * Return a pointer to the first element of the sequence or nullptr if the span
      * is empty().
      *
      * @return The pointer to the first element of the span.
@@ -519,13 +519,13 @@ struct span<ElementType, SPAN_DYNAMIC_EXTENT> {
     /**
      * Construct an empty span.
      *
-     * @post a call to size() returns 0, and data() returns NULL.
+     * @post a call to size() returns 0, and data() returns nullptr.
      *
      * @note This function is not accessible if Extent != SPAN_DYNAMIC_EXTENT or
      * Extent != 0 .
      */
     span() :
-        _data(NULL), _size(0) { }
+        _data(nullptr), _size(0) { }
 
     /**
      * Construct a span from a pointer to a buffer and its size.
@@ -543,7 +543,7 @@ struct span<ElementType, SPAN_DYNAMIC_EXTENT> {
         _data(ptr), _size(count)
     {
         MBED_ASSERT(count >= 0);
-        MBED_ASSERT(ptr != NULL || count == 0);
+        MBED_ASSERT(ptr != nullptr || count == 0);
     }
 
     /**
@@ -562,7 +562,7 @@ struct span<ElementType, SPAN_DYNAMIC_EXTENT> {
         _data(first), _size(last - first)
     {
         MBED_ASSERT(first <= last);
-        MBED_ASSERT(first != NULL  || (last - first) == 0);
+        MBED_ASSERT(first != nullptr  || (last - first) == 0);
     }
 
     // AStyle ignore, not handling correctly below
