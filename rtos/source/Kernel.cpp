@@ -73,6 +73,13 @@ uint64_t Kernel::get_ms_count()
 #endif
 }
 
+Kernel::Clock::time_point Kernel::Clock::now()
+{
+    return Kernel::Clock::time_point(Kernel::Clock::duration(Kernel::get_ms_count()));
+}
+
+constexpr bool Kernel::Clock::is_steady;
+
 #if MBED_CONF_RTOS_PRESENT
 void Kernel::attach_idle_hook(void (*fptr)(void))
 {

@@ -23,6 +23,7 @@
 #define KERNEL_H
 
 #include <stdint.h>
+#include <chrono>
 #include "rtos/mbed_rtos_types.h"
 
 namespace rtos {
@@ -43,6 +44,21 @@ namespace Kernel {
      @note You cannot call this function from ISR context.
  */
 uint64_t get_ms_count();
+
+/** C++11 millisecond tick count
+ *   This class is a TrivialClock corresponding to Kernel::get_ms_count(),
+ *   for use with <chrono> functions.
+ */
+struct Clock {
+    using rep = int64_t;
+    using period = std::milli;
+    using duration = std::chrono::duration<rep, period>;
+    using time_point = std::chrono::time_point<Clock>;
+    static constexpr bool is_steady = true;
+    static time_point now() {
+        return time_point(duration(Kernel::get_ms_count()));
+    }
+};
 
 /** Attach a function to be called by the RTOS idle task.
   @param   fptr pointer to the function to be called

@@ -145,12 +145,25 @@ uint32_t flags_wait_any_for(uint32_t flags, uint32_t millisec, bool clear = true
 */
 uint32_t flags_wait_any_until(uint32_t flags, uint64_t millisec, bool clear = true);
 
+namespace impl {
+    void sleep_for(uint32_t millisec);
+    void sleep_until(uint64_t millisec);
+}
 /** Sleep for a specified time period in millisec:
   @param   millisec  time delay value
   @note You cannot call this function from ISR context.
   @note The equivalent functionality is accessible in C via thread_sleep_for.
 */
-void sleep_for(uint32_t millisec);
+void sleep_for(uint32_t millisec)
+{
+    impl::sleep_for_ms(millisec);
+}
+
+template <typename Rep, typename Period>
+void sleep_for(std::chrono::duration<Rep, Period> rel)
+{
+    impl::sleep_for(std::chrono::duration_cast<Kernel::Clock::duration>(rel).count());
+}
 
 /** Sleep until a specified time in millisec
   The specified time is according to Kernel::get_ms_count().
@@ -160,7 +173,17 @@ void sleep_for(uint32_t millisec);
         returns immediately.
   @note The equivalent functionality is accessible in C via thread_sleep_until.
 */
-void sleep_until(uint64_t millisec);
+void sleep_until(uint64_t millisec)
+{
+    impl::sleep_until(millisec);
+}
+
+template <class Duration>
+void sleep_until(std::chrono::time_point<Kernel::Clock, Duration> abs)
+{
+    impl::sleep_until(std::chrono::duration_cast<Kernel::Clock::duration>(abs.time_since_epoch()).count());
+}
+
 
 /** Pass control to next equal-priority thread that is in state READY.
     (Higher-priority READY threads would prevent us from running; this
