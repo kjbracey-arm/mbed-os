@@ -51,7 +51,7 @@ public:
      * @param[in] queue a pointer to the events queue to use
      * @param[in] ndef_buffer a bytes array used to store NDEF messages
      */
-    NFCEEPROM(NFCEEPROMDriver *driver, events::EventQueue *queue, const Span<uint8_t> &ndef_buffer);
+    NFCEEPROM(NFCEEPROMDriver *driver, events::EventQueue *queue, const mstd::span<uint8_t> &ndef_buffer);
 
     /**
      * The NFCEEPROM delegate. Users of the NFCEEPROM class need to implement this delegate's methods to receive events.
@@ -141,16 +141,16 @@ private:
         nfc_eeprom_erase_end_session
     };
 
-    Delegate *_delegate;
+    Delegate *_delegate = nullptr;
     NFCEEPROMDriver *_driver;
     events::EventQueue *_event_queue;
-    bool _initialized;
+    bool _initialized = false;
 
-    nfc_eeprom_operation_t _current_op;
-    ac_buffer_t _ndef_buffer_reader;
-    size_t _ndef_buffer_read_sz;
-    uint32_t _eeprom_address;
-    nfc_err_t _operation_result;
+    nfc_eeprom_operation_t _current_op = nfc_eeprom_idle;
+    ac_buffer_t _ndef_buffer_reader{};
+    size_t _ndef_buffer_read_sz = 0;
+    uint32_t _eeprom_address = 0;
+    nfc_err_t _operation_result = NFC_ERR_UNKNOWN;
 };
 /** @}*/
 } // namespace nfc

@@ -19,8 +19,7 @@
 
 #include <stdint.h>
 #include <string.h>
-
-#include "platform/Span.h"
+#include <mstd_span>
 
 #include "nfc/ndef/RecordParser.h"
 #include "nfc/ndef/MessageBuilder.h"
@@ -96,7 +95,7 @@ public:
      * @note To remove the NULL terminator of the C-string of the uri_field
      * parameter, you can use the utility function span_from_cstr.
      */
-    URI(uri_identifier_code_t id, const Span<const uint8_t> &uri_field);
+    URI(uri_identifier_code_t id, const mstd::span<const uint8_t> &uri_field);
 
     /**
      * Construct a URI from another URI.
@@ -127,7 +126,7 @@ public:
      */
     void set_uri(
         uri_identifier_code_t id,
-        const Span<const uint8_t> &uri_field
+        const mstd::span<const uint8_t> &uri_field
     );
 
     /**
@@ -140,7 +139,7 @@ public:
      * Return the current value of the uri field.
      * @return The value of the uri field.
      */
-    Span<const uint8_t> get_uri_field() const;
+    mstd::span<const uint8_t> get_uri_field() const;
 
     /**
      * Append into a message builder

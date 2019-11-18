@@ -18,8 +18,7 @@
 #define NFC_NDEF_RECORD_H_
 
 #include <stdint.h>
-
-#include "platform/Span.h"
+#include <mstd_span>
 
 namespace mbed {
 namespace nfc {
@@ -113,7 +112,7 @@ struct RecordType {
      * @param tnf The type name format of the record type.
      * @param value The value associated with the tnf.
      */
-    RecordType(tnf_t tnf, const Span<const uint8_t> &value) :
+    RecordType(tnf_t tnf, const mstd::span<const uint8_t> &value) :
         tnf(tnf), value(value)
     { }
 
@@ -125,7 +124,7 @@ struct RecordType {
     /**
      * Value associated with the record type. It can be empty.
      */
-    Span<const uint8_t> value;
+    mstd::span<const uint8_t> value;
 };
 
 /**
@@ -133,14 +132,14 @@ struct RecordType {
  *
  * @note A payload can be empty.
  */
-typedef Span<const uint8_t> RecordPayload;
+typedef mstd::span<const uint8_t> RecordPayload;
 
 /**
  * Definition of a Record IR.
  *
  * @note ID's are optional and therefore it can be empty.
  */
-typedef Span<const uint8_t> RecordID;
+typedef mstd::span<const uint8_t> RecordID;
 
 /**
  * Represent a record.
@@ -149,7 +148,7 @@ struct Record {
     /**
      * Construct an empty record.
      */
-    Record() : type(), payload(), id(), chunk(false), last_record(false) { }
+    Record() : chunk(false), last_record(false) { }
 
     /**
      * Construct a record from its type, payload and id.

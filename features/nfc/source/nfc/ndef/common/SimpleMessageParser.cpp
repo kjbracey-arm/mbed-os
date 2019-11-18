@@ -46,7 +46,7 @@ void SimpleMessageParser::set_delegate(Delegate *delegate)
     _delegate = delegate;
 }
 
-void SimpleMessageParser::parse(const Span<const uint8_t> &data_buffer)
+void SimpleMessageParser::parse(const mstd::span<const uint8_t> &data_buffer)
 {
     _message_parser.parse(data_buffer);
 }

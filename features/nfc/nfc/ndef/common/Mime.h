@@ -18,8 +18,7 @@
 #define NFC_COMMON_MIME_H_
 
 #include <stdint.h>
-
-#include "platform/Span.h"
+#include <mstd_span>
 
 #include "nfc/ndef/RecordParser.h"
 #include "nfc/ndef/MessageBuilder.h"
@@ -42,7 +41,7 @@ public:
     /**
      * Construct an empty Mime object.
      */
-    Mime();
+    Mime() = default;
 
     /**
      * Construct a mime object from its type and content
@@ -54,8 +53,8 @@ public:
      * parameter, you can use the utility function span_from_cstr.
      */
     Mime(
-        const Span<const uint8_t> &mime_type,
-        const Span<const uint8_t> &content
+        const mstd::span<const uint8_t> &mime_type,
+        const mstd::span<const uint8_t> &content
     );
 
     /**
@@ -88,21 +87,21 @@ public:
      * parameter, you can use the utility function span_from_cstr.
      */
     void set_mime(
-        const Span<const uint8_t> &mime_type,
-        const Span<const uint8_t> &content
+        const mstd::span<const uint8_t> &mime_type,
+        const mstd::span<const uint8_t> &content
     );
 
     /**
      * Return the mime type.
      * @return The mime type.
      */
-    Span<const uint8_t> get_mime_type() const;
+    mstd::span<const uint8_t> get_mime_type() const;
 
     /**
      * Return the content of the mime object.
      * @return the content of the mime object.
      */
-    Span<const uint8_t> get_mime_content() const;
+    mstd::span<const uint8_t> get_mime_content() const;
 
     /**
      * Append into a message builder
@@ -130,9 +129,9 @@ private:
 
     size_t mime_size() const;
 
-    uint8_t *_mime;
-    size_t _type_size;
-    size_t _content_size;
+    uint8_t *_mime = nullptr;
+    size_t _type_size = 0;
+    size_t _content_size = 0;
 };
 
 /**

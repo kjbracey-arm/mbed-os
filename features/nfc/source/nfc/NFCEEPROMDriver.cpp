@@ -19,16 +19,6 @@
 using namespace mbed;
 using namespace mbed::nfc;
 
-NFCEEPROMDriver::NFCEEPROMDriver() : _delegate(NULL), _event_queue(NULL)
-{
-
-}
-
-NFCEEPROMDriver::~NFCEEPROMDriver()
-{
-
-}
-
 void NFCEEPROMDriver::set_delegate(Delegate *delegate)
 {
     _delegate = delegate;

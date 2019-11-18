@@ -38,12 +38,12 @@ public:
     /**
      * Construct a NFCEEPROM driver instance.
      */
-    NFCEEPROMDriver();
+    NFCEEPROMDriver() = default;
 
     /**
      * NFCEEPROM driver destructor.
      */
-    virtual ~NFCEEPROMDriver();
+    virtual ~NFCEEPROMDriver() = default;
 
     /**
      * The NFCEEPROMDriver delegate.
@@ -101,7 +101,7 @@ public:
         virtual void on_bytes_erased(size_t count) = 0;
 
     protected:
-        ~Delegate() {}
+        ~Delegate() = default;
     };
 
     /**
@@ -189,8 +189,8 @@ protected:
     events::EventQueue *event_queue();
 
 private:
-    Delegate *_delegate;
-    events::EventQueue *_event_queue;
+    Delegate *_delegate = nullptr;
+    events::EventQueue *_event_queue = nullptr;
 };
 
 /**

@@ -18,13 +18,12 @@
 #define MBED_NFC_REMOTE_INITIATOR_H
 
 #include <stdint.h>
+#include <mstd_span>
 
 #include "NFCDefinitions.h"
 #include "NFCRemoteEndpoint.h"
 #include "NFCNDEFCapable.h"
 #include "stack/tech/iso7816/iso7816_app.h"
-
-#include "platform/Span.h"
 
 namespace mbed {
 namespace nfc {
@@ -48,7 +47,7 @@ public:
      * @param[in] controller the NFCController instance that detected this endpoint
      * @param[in] buffer a bytes array used to store NDEF messages
      */
-    NFCRemoteInitiator(NFCController *controller, const Span<uint8_t> &buffer);
+    NFCRemoteInitiator(NFCController *controller, const mstd::span<uint8_t> &buffer);
     virtual ~NFCRemoteInitiator();
 
     /**

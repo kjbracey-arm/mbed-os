@@ -36,7 +36,7 @@ URI::URI() :
 {
 }
 
-URI::URI(uri_identifier_code_t id, const Span<const uint8_t> &uri_field) :
+URI::URI(uri_identifier_code_t id, const mstd::span<const uint8_t> &uri_field) :
     _uri(uri_field.size() ? new uint8_t[uri_id_code_size + uri_field.size()] : NULL),
     _uri_size(uri_id_code_size + uri_field.size())
 {
@@ -78,7 +78,7 @@ URI &URI::operator=(const URI &other)
 
 void URI::set_uri(
     uri_identifier_code_t id,
-    const Span<const uint8_t> &uri_field
+    const mstd::span<const uint8_t> &uri_field
 )
 {
     delete[] _uri;
@@ -104,15 +104,15 @@ URI::uri_identifier_code_t URI::get_id() const
     return static_cast<uri_identifier_code_t>(_uri[uri_id_index]);
 }
 
-Span<const uint8_t> URI::get_uri_field() const
+mstd::span<const uint8_t> URI::get_uri_field() const
 {
     if (!_uri) {
-        return Span<const uint8_t>();
+        return {};
     }
-    return make_const_Span(
+    return {
                _uri + uri_field_index,
                _uri_size - uri_id_code_size
-           );
+           };
 }
 
 bool URI::append_as_record(MessageBuilder &message_builder, bool is_last_record) const
@@ -167,7 +167,8 @@ bool URIParser::do_parse(const Record &record, URI &uri)
     }
 
     // the record type value should be equal to `U`
-    if (record.type.value != make_const_Span(uri_record_type_value) ||
+    if (!std::equal(std::begin(record.type.value), std::end(record.type.value),
+                    std::begin(uri_record_type_value), std::end(uri_record_type_value)) ||
             record.payload.empty()
        ) {
         return false;

@@ -18,6 +18,7 @@
 #define MBED_NFC_CONTROLLER_H
 
 #include <stdint.h>
+#include <mstd_span>
 #include "events/EventQueue.h"
 #include "platform/SharedPtr.h"
 #include "drivers/Timer.h"
@@ -25,8 +26,6 @@
 
 #include "NFCDefinitions.h"
 #include "NFCControllerDriver.h"
-
-#include "platform/Span.h"
 
 namespace mbed {
 namespace nfc {
@@ -85,7 +84,7 @@ public:
         virtual void on_nfc_target_discovered(const SharedPtr<NFCRemoteTarget> &nfc_target) {}
 
     protected:
-        ~Delegate() { }
+        ~Delegate() = default;
     };
 
     /**
@@ -95,7 +94,7 @@ public:
      * @param[in] queue a pointer to the events queue to use
      * @param[in] ndef_buffer a bytes array used to store NDEF messages
      */
-    NFCController(NFCControllerDriver *driver, events::EventQueue *queue, const Span<uint8_t> &ndef_buffer);
+    NFCController(NFCControllerDriver *driver, events::EventQueue *queue, const mstd::span<uint8_t> &ndef_buffer);
 
     /**
      * Initialize the NFC controller
@@ -169,13 +168,13 @@ private:
 
     NFCControllerDriver *_driver;
     events::EventQueue *_queue;
-    nfc_transceiver_t *_transceiver;
-    nfc_scheduler_t *_scheduler;
+    nfc_transceiver_t *_transceiver = nullptr;
+    nfc_scheduler_t *_scheduler = nullptr;
     Timer _timer;
     Timeout _timeout;
-    Delegate *_delegate;
-    bool _discovery_running;
-    Span<uint8_t> _ndef_buffer;
+    Delegate *_delegate = nullptr;
+    bool _discovery_running = false;
+    mstd::span<uint8_t> _ndef_buffer;
 };
 /** @}*/
 } // namespace nfc

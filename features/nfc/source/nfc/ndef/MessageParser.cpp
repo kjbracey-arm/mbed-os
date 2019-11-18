@@ -15,13 +15,14 @@
  */
 
 #include <string.h>
+#include <algorithm>
 
 #include "nfc/ndef/MessageParser.h"
 #include "nfc/ndef/Record.h"
 
 namespace {
 struct buffer_iterator_t {
-    buffer_iterator_t(const mbed::Span<const uint8_t> &buffer) :
+    buffer_iterator_t(const mstd::span<const uint8_t> &buffer) :
         buffer(buffer),
         position(0)
     { }
@@ -77,14 +78,14 @@ struct buffer_iterator_t {
         position += size;
     }
 
-    mbed::Span<const uint8_t> get_underlying_buffer() const
+    mstd::span<const uint8_t> get_underlying_buffer() const
     {
-        return buffer.last(buffer.size() - position);
+        return buffer.subspan(position);
     }
 
 private:
-    mbed::Span<const uint8_t> buffer;
-    mbed::Span<const uint8_t>::index_type position;
+    mstd::span<const uint8_t> buffer;
+    mstd::span<const uint8_t>::index_type position;
 };
 
 } // end of anonymous namespace
@@ -94,7 +95,7 @@ namespace nfc {
 namespace ndef {
 
 struct MessageParser::parsing_state_t {
-    parsing_state_t(const Span<const uint8_t> &data_buffer) :
+    parsing_state_t(const mstd::span<const uint8_t> &data_buffer) :
         it(data_buffer),
         first_record_parsed(false),
         last_record_parsed(false),
@@ -116,7 +117,7 @@ void MessageParser::set_delegate(Delegate *delegate)
     _delegate = delegate;
 }
 
-void MessageParser::parse(const Span<const uint8_t> &data_buffer)
+void MessageParser::parse(const mstd::span<const uint8_t> &data_buffer)
 {
     parsing_state_t parsing_state(data_buffer);
     report_parsing_started();

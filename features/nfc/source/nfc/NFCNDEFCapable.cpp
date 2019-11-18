@@ -25,7 +25,7 @@
 using namespace mbed;
 using namespace mbed::nfc;
 
-NFCNDEFCapable::NFCNDEFCapable(const Span<uint8_t> &buffer)
+NFCNDEFCapable::NFCNDEFCapable(const mstd::span<uint8_t> &buffer)
 {
     ndef_msg_init(&_ndef_message, s_ndef_encode, s_ndef_decode, buffer.data(), buffer.size(), this);
 }
@@ -37,7 +37,7 @@ void NFCNDEFCapable::parse_ndef_message(const ac_buffer_t &buffer)
 
     Delegate *delegate = ndef_capable_delegate();
     if (delegate != NULL) {
-        delegate->parse_ndef_message(make_const_Span(ac_buffer_reader_current_buffer_pointer(&reader), ac_buffer_reader_current_buffer_length(&reader)));
+        delegate->parse_ndef_message({ac_buffer_reader_current_buffer_pointer(&reader), ac_buffer_reader_current_buffer_length(&reader)});
     }
 }
 
@@ -45,7 +45,7 @@ void NFCNDEFCapable::build_ndef_message(ac_buffer_builder_t &buffer_builder)
 {
     Delegate *delegate = ndef_capable_delegate();
     if (delegate != NULL) {
-        size_t count = delegate->build_ndef_message(make_Span(ac_buffer_builder_write_position(&buffer_builder), ac_buffer_builder_writable(&buffer_builder)));
+        size_t count = delegate->build_ndef_message({ac_buffer_builder_write_position(&buffer_builder), ac_buffer_builder_writable(&buffer_builder)});
         ac_buffer_builder_write_n_skip(&buffer_builder, count);
     }
 }

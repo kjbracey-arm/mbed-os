@@ -23,15 +23,9 @@ namespace nfc {
 namespace ndef {
 namespace common {
 
-Mime::Mime() :
-    _mime(NULL),
-    _type_size(0),
-    _content_size(0)
-{ }
-
 Mime::Mime(
-    const Span<const uint8_t> &mime_type,
-    const Span<const uint8_t> &content
+    const mstd::span<const uint8_t> &mime_type,
+    const mstd::span<const uint8_t> &content
 ) : _mime(new uint8_t[mime_type.size() + content.size()]),
     _type_size(mime_type.size()),
     _content_size(content.size())
@@ -70,8 +64,8 @@ Mime &Mime::operator=(const Mime &to_copy)
 }
 
 void Mime::set_mime(
-    const Span<const uint8_t> &mime_type,
-    const Span<const uint8_t> &content
+    const mstd::span<const uint8_t> &mime_type,
+    const mstd::span<const uint8_t> &content
 )
 {
     delete[] _mime;
@@ -83,14 +77,14 @@ void Mime::set_mime(
     _content_size = content.size();
 }
 
-Span<const uint8_t> Mime::get_mime_type() const
+mstd::span<const uint8_t> Mime::get_mime_type() const
 {
-    return make_const_Span(_mime, _type_size);
+    return {_mime, _type_size};
 }
 
-Span<const uint8_t> Mime::get_mime_content() const
+mstd::span<const uint8_t> Mime::get_mime_content() const
 {
-    return make_const_Span(_mime + _type_size, _content_size);
+    return {_mime + _type_size, _content_size};
 }
 
 bool Mime::append_as_record(

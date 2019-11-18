@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <mstd_span>
 
 #include "NFCNDEFCapable.h"
 #include "NFCRemoteInitiator.h"
@@ -27,8 +28,6 @@
 #include "nfc/acore/acore/ac_buffer_reader.h"
 #include "nfc/acore/acore/ac_buffer_builder.h"
 #include "nfc/stack/tech/type4/type4_target.h"
-
-#include "platform/Span.h"
 
 namespace mbed {
 namespace nfc {
@@ -49,12 +48,7 @@ public:
      * @param[in] controller pointer to the NFCController instance that created this object
      * @param[in] buffer a bytes array used to store NDEF messages
      */
-    Type4RemoteInitiator(NFCController *controller, const Span<uint8_t> &buffer);
-
-    /**
-     * Type4RemoteInitiator destructor.
-     */
-    virtual ~Type4RemoteInitiator();
+    Type4RemoteInitiator(NFCController *controller, const mstd::span<uint8_t> &buffer);
 
     // NFCRemoteEndpoint implementation
     virtual nfc_err_t connect();
@@ -75,8 +69,8 @@ public:
     void disconnected_callback();
     static void s_disconnected_callback(nfc_tech_iso7816_t *pIso7816, void *pUserData);
 
-    bool _is_connected;
-    bool _is_disconnected;
+    bool _is_connected = false;
+    bool _is_disconnected = false;
     nfc_tech_iso7816_t _iso7816;
     nfc_tech_type4_target_t _type4;
 };

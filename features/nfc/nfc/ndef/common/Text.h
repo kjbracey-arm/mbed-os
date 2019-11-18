@@ -18,8 +18,7 @@
 #define NFC_COMMON_TEXT_H_
 
 #include <stdint.h>
-
-#include "platform/Span.h"
+#include <mstd_span>
 
 #include "nfc/ndef/RecordParser.h"
 #include "nfc/ndef/MessageBuilder.h"
@@ -64,8 +63,8 @@ public:
      */
     Text(
         encoding_t text_encoding,
-        const Span<const uint8_t> &language_code,
-        const Span<const uint8_t> &text
+        const mstd::span<const uint8_t> &language_code,
+        const mstd::span<const uint8_t> &text
     );
 
     /**
@@ -98,8 +97,8 @@ public:
      */
     void set_text(
         encoding_t text_encoding,
-        const Span<const uint8_t> &language_code,
-        const Span<const uint8_t> &text
+        const mstd::span<const uint8_t> &language_code,
+        const mstd::span<const uint8_t> &text
     );
 
     /**
@@ -112,13 +111,13 @@ public:
      * Return the language code.
      * @return The language code.
      */
-    Span<const uint8_t> get_language_code() const;
+    mstd::span<const uint8_t> get_language_code() const;
 
     /**
      * Return the text contained in this object.
      * @return The text contained in this object.
      */
-    Span<const uint8_t> get_text() const;
+    mstd::span<const uint8_t> get_text() const;
 
     /**
      * Append into a message builder

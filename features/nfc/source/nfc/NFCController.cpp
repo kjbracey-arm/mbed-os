@@ -23,8 +23,8 @@
 using namespace mbed;
 using namespace mbed::nfc;
 
-NFCController::NFCController(NFCControllerDriver *driver, events::EventQueue *queue, const Span<uint8_t> &ndef_buffer) :
-    _driver(driver), _queue(queue), _transceiver(NULL), _scheduler(NULL), _delegate(NULL), _discovery_running(false), _ndef_buffer(ndef_buffer)
+NFCController::NFCController(NFCControllerDriver *driver, events::EventQueue *queue, const mstd::span<uint8_t> &ndef_buffer) :
+    _driver(driver), _queue(queue), _ndef_buffer(ndef_buffer)
 {
     _driver->set_delegate(this);
 }

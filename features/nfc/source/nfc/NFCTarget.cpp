@@ -19,13 +19,8 @@
 using namespace mbed;
 using namespace mbed::nfc;
 
-NFCTarget::NFCTarget(const Span<uint8_t> &buffer) :
+NFCTarget::NFCTarget(const mstd::span<uint8_t> &buffer) :
     NFCNDEFCapable(buffer)
-{
-
-}
-
-NFCTarget::~NFCTarget()
 {
 
 }

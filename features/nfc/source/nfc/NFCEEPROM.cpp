@@ -20,9 +20,8 @@
 using namespace mbed;
 using namespace mbed::nfc;
 
-NFCEEPROM::NFCEEPROM(NFCEEPROMDriver *driver, events::EventQueue *queue, const Span<uint8_t> &ndef_buffer) : NFCTarget(ndef_buffer),
-    _delegate(NULL), _driver(driver), _event_queue(queue), _initialized(false), _current_op(nfc_eeprom_idle), _ndef_buffer_read_sz(0), _eeprom_address(0),
-    _operation_result(NFC_ERR_UNKNOWN), _ndef_buffer_reader{nullptr, 0, nullptr}
+NFCEEPROM::NFCEEPROM(NFCEEPROMDriver *driver, events::EventQueue *queue, const mstd::span<uint8_t> &ndef_buffer) : NFCTarget(ndef_buffer),
+    _driver(driver), _event_queue(queue)
 {
     _driver->set_delegate(this);
     _driver->set_event_queue(queue);
@@ -30,7 +29,7 @@ NFCEEPROM::NFCEEPROM(NFCEEPROMDriver *driver, events::EventQueue *queue, const S
 
 nfc_err_t NFCEEPROM::initialize()
 {
-    MBED_ASSERT(_initialized == false); // Initialize should only be called once
+    MBED_ASSERT(!_initialized); // Initialize should only be called once
 
     // Initialize driver
     _driver->reset();
@@ -45,7 +44,7 @@ void NFCEEPROM::set_delegate(NFCEEPROM::Delegate *delegate)
 
 void NFCEEPROM::write_ndef_message()
 {
-    MBED_ASSERT(_initialized == true);
+    MBED_ASSERT(_initialized);
     if (_current_op != nfc_eeprom_idle) {
         if (_delegate != NULL) {
             _delegate->on_ndef_message_written(NFC_ERR_BUSY);
@@ -80,7 +79,7 @@ void NFCEEPROM::write_ndef_message()
 
 void NFCEEPROM::read_ndef_message()
 {
-    MBED_ASSERT(_initialized == true);
+    MBED_ASSERT(_initialized);
     if (_current_op != nfc_eeprom_idle) {
         if (_delegate != NULL) {
             _delegate->on_ndef_message_written(NFC_ERR_BUSY);
@@ -106,7 +105,7 @@ void NFCEEPROM::erase_ndef_message()
     // We don't want to take any risks, so erase the whole address space
     // And set the message size to 0
 
-    MBED_ASSERT(_initialized == true);
+    MBED_ASSERT(_initialized);
     if (_current_op != nfc_eeprom_idle) {
         if (_delegate != NULL) {
             _delegate->on_ndef_message_erased(NFC_ERR_BUSY);

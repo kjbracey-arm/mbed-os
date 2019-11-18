@@ -18,11 +18,10 @@
 #define MBED_NFC_TARGET_H
 
 #include <stdint.h>
+#include <mstd_span>
 
 #include "NFCDefinitions.h"
 #include "NFCNDEFCapable.h"
-
-#include "platform/Span.h"
 
 namespace mbed {
 namespace nfc {
@@ -44,12 +43,12 @@ public:
      *
      * @param[in] buffer a bytes array used to store NDEF messages
      */
-    NFCTarget(const Span<uint8_t> &buffer);
+    NFCTarget(const mstd::span<uint8_t> &buffer);
 
     /**
      * NFCTarget destructor
      */
-    virtual ~NFCTarget();
+    virtual ~NFCTarget() = default;
 
     struct Delegate : NFCNDEFCapable::Delegate {
         /**

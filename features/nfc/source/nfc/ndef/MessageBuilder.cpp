@@ -22,7 +22,7 @@ namespace mbed {
 namespace nfc {
 namespace ndef {
 
-MessageBuilder::MessageBuilder(const Span<uint8_t> &buffer) :
+MessageBuilder::MessageBuilder(const mstd::span<uint8_t> &buffer) :
     _message_buffer(buffer),
     _position(0),
     _message_started(false),
@@ -156,7 +156,7 @@ void MessageBuilder::reset()
     _in_chunk = false;
 }
 
-void MessageBuilder::reset(const Span<uint8_t> &buffer)
+void MessageBuilder::reset(const mstd::span<uint8_t> &buffer)
 {
     _message_buffer = buffer;
     _position = 0;
@@ -170,12 +170,12 @@ bool MessageBuilder::is_message_complete() const
     return _message_ended;
 }
 
-Span<const uint8_t> MessageBuilder::get_message() const
+mstd::span<const uint8_t> MessageBuilder::get_message() const
 {
     if (is_message_complete()) {
         return _message_buffer.first(_position);
     } else {
-        return Span<const uint8_t>();
+        return {};
     }
 }
 
@@ -270,16 +270,12 @@ void MessageBuilder::append_type(const Record &record)
 
 void MessageBuilder::append_id(const Record &record)
 {
-    if (record.id.empty()) {
-        return;
-    }
-
-    memcpy(
-        _message_buffer.data() + _position,
-        record.id.data(),
-        record.id.size()
-    );
-    _position += record.id.size();
+    auto end = std::copy(
+        record.id.begin(),
+        record.id.end(),
+        _message_buffer.begin() + _position);
+        
+    _position = end - _message_buffer.begin();
 }
 
 void MessageBuilder::append_payload(const Record &record, const PayloadBuilder *builder)
@@ -304,11 +300,7 @@ void MessageBuilder::append_payload(const Record &record, const PayloadBuilder *
 
 bool MessageBuilder::is_short_payload(const Record &record, const PayloadBuilder *builder)
 {
-    if (get_payload_size(record, builder) <= 255) {
-        return true;
-    } else {
-        return false;
-    }
+    return get_payload_size(record, builder) <= 255;
 }
 
 size_t MessageBuilder::get_payload_size(const Record &record, const PayloadBuilder *builder)

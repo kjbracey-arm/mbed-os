@@ -18,7 +18,8 @@
 #define NFC_NDEF_MESSAGEPARSER_H_
 
 #include <stdlib.h>
-#include "platform/Span.h"
+#include <stdint.h>
+#include <mstd_span>
 
 namespace mbed {
 namespace nfc {
@@ -141,7 +142,7 @@ public:
      *
      * @param data_buffer The data buffer that contains the NDEF message.
      */
-    void parse(const Span<const uint8_t> &data_buffer);
+    void parse(const mstd::span<const uint8_t> &data_buffer);
 
 private:
     struct parsing_state_t;

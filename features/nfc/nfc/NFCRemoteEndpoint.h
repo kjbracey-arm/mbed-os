@@ -46,7 +46,7 @@ public:
     /**
      * Destructor
      */
-    virtual ~NFCRemoteEndpoint();
+    virtual ~NFCRemoteEndpoint() = default;
 
     /**
      * The NFCRemoteEndpoint base delegate.
@@ -63,7 +63,7 @@ public:
         virtual void on_disconnected() {}
 
     protected:
-        ~Delegate() {}
+        ~Delegate() = default;
     };
 
     /**

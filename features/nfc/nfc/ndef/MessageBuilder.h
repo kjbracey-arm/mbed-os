@@ -18,8 +18,7 @@
 #define NFC_NDEF_MESSAGEBUILDER_H_
 
 #include <stdint.h>
-
-#include "platform/Span.h"
+#include <mstd_span>
 
 #include "nfc/ndef/Record.h"
 
@@ -53,7 +52,7 @@ public:
          *
          * @param buffer The buffer used to construct the payload.
          */
-        virtual void build(const Span<uint8_t> &buffer) const = 0;
+        virtual void build(const mstd::span<uint8_t> &buffer) const = 0;
 
     protected:
         /**
@@ -68,7 +67,7 @@ public:
      *
      * @param buffer The data buffer that will contain the NDEF message.
      */
-    MessageBuilder(const Span<uint8_t> &buffer);
+    MessageBuilder(const mstd::span<uint8_t> &buffer);
 
     /**
      * Append a new record to the message being built.
@@ -150,7 +149,7 @@ public:
     /**
      * Reset the builder state and assign a new buffer to it.
      */
-    void reset(const Span<uint8_t> &buffer);
+    void reset(const mstd::span<uint8_t> &buffer);
 
     /**
      * Return true if the message stored is complete and false otherwise.
@@ -165,7 +164,7 @@ public:
      *
      * @return The message built.
      */
-    Span<const uint8_t> get_message() const;
+    mstd::span<const uint8_t> get_message() const;
 
 private:
     // append fields
@@ -182,7 +181,7 @@ private:
     static size_t get_payload_size(const Record &, const PayloadBuilder *);
 
     // builder state.
-    Span<uint8_t> _message_buffer;
+    mstd::span<uint8_t> _message_buffer;
     size_t _position;
     bool _message_started;
     bool _message_ended;

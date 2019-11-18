@@ -29,20 +29,14 @@
 using namespace mbed;
 using namespace mbed::nfc;
 
-Type4RemoteInitiator::Type4RemoteInitiator(NFCController *controller, const Span<uint8_t> &buffer) :
-    NFCRemoteInitiator(controller, buffer),
-    _is_connected(false), _is_disconnected(false)
+Type4RemoteInitiator::Type4RemoteInitiator(NFCController *controller, const mstd::span<uint8_t> &buffer) :
+    NFCRemoteInitiator(controller, buffer)
 {
     // Init ISO7816
     nfc_tech_iso7816_init(&_iso7816, nfc_controller()->transceiver(), &Type4RemoteInitiator::s_disconnected_callback, this);
 
     // Init Type 4 app
     nfc_tech_type4_target_init(&_type4, &_iso7816, ndef_message());
-}
-
-Type4RemoteInitiator::~Type4RemoteInitiator()
-{
-
 }
 
 nfc_err_t Type4RemoteInitiator::connect()
@@ -135,6 +129,6 @@ void Type4RemoteInitiator::disconnected_callback()
 
 void Type4RemoteInitiator::s_disconnected_callback(nfc_tech_iso7816_t *pIso7816, void *pUserData)
 {
-    Type4RemoteInitiator *self = (Type4RemoteInitiator *) pUserData;
+    Type4RemoteInitiator *self = static_cast<Type4RemoteInitiator *>(pUserData);
     self->disconnected_callback();
 }

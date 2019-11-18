@@ -17,7 +17,7 @@
 #ifndef NFC_COMMON_SIMPLEMESSAGEPARSER_H_
 #define NFC_COMMON_SIMPLEMESSAGEPARSER_H_
 
-#include "platform/Span.h"
+#include <mstd_span>
 
 #include "nfc/ndef/MessageParser.h"
 #include "nfc/ndef/RecordParser.h"
@@ -118,7 +118,7 @@ public:
      *
      * @param data_buffer The data buffer that contains the NDEF message.
      */
-    void parse(const Span<const uint8_t> &data_buffer);
+    void parse(const mstd::span<const uint8_t> &data_buffer);
 
     /**
      * Insert a new parser in the parser chain.

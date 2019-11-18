@@ -37,7 +37,7 @@ struct RecordParser {
     /**
      * Construct a record parser.
      */
-    RecordParser() : _next_parser(NULL) { }
+    constexpr RecordParser() = default;
 
     /**
      * Parse the record in input.
@@ -51,11 +51,11 @@ protected:
      * Protected non virtual destructor.
      * RecordParser subclasses are not meant to be destroyed as RecordParser's.
      */
-    ~RecordParser() { }
+    ~RecordParser() = default;
 
 private:
     friend class RecordParserChain;
-    RecordParser *_next_parser;
+    RecordParser *_next_parser = nullptr;
 };
 
 
@@ -85,13 +85,13 @@ struct GenericRecordParser : public RecordParser {
         virtual void on_record_parsed(const ParsingResult &object_parsed, const RecordID &id) = 0;
 
     protected:
-        ~Delegate() { }
+        ~Delegate() = default;
     };
 
     /**
      * Construct a record parser.
      */
-    GenericRecordParser() : _delegate(NULL) { }
+    constexpr GenericRecordParser() = default;
 
     /**
      * @see RecordParser::parse
@@ -122,10 +122,10 @@ protected:
     /**
      * Protected non virtual destructor.
      */
-    ~GenericRecordParser() { }
+    ~GenericRecordParser() = default;
 
 private:
-    Delegate *_delegate;
+    Delegate *_delegate = nullptr;
 };
 
 
@@ -136,12 +136,12 @@ struct RecordParserChain {
     /**
      * Construct a parser chain.
      */
-    RecordParserChain() : _parsers(NULL) { }
+    constexpr RecordParserChain() = default;
 
     /**
      * Destroy a parser chain.
      */
-    ~RecordParserChain() { }
+    ~RecordParserChain() = default;
 
     /**
      * Parse a record.
@@ -157,7 +157,7 @@ struct RecordParserChain {
     void set_next_parser(RecordParser *parser);
 
 private:
-    RecordParser *_parsers;
+    RecordParser *_parsers = nullptr;
 };
 
 /**

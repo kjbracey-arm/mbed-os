@@ -19,12 +19,12 @@
 #include "nfc/ndef/common/Text.h"
 
 namespace {
-static const uint8_t utf16_encoding_bit = (1 << 7);
-static const uint8_t language_code_size_mask = 0x3F;
-static const uint8_t header_index = 0;
-static const uint8_t language_code_index = 1;
-static const uint8_t header_size = 1;
-static const uint8_t text_record_type_value[] = { 'T' };
+constexpr uint8_t utf16_encoding_bit = (1 << 7);
+constexpr uint8_t language_code_size_mask = 0x3F;
+constexpr uint8_t header_index = 0;
+constexpr uint8_t language_code_index = 1;
+constexpr uint8_t header_size = 1;
+constexpr uint8_t text_record_type_value[] = { 'T' };
 }
 
 namespace mbed {
@@ -48,8 +48,8 @@ Text::Text(const Text &other) :
 
 Text::Text(
     encoding_t text_encoding,
-    const Span<const uint8_t> &language_code,
-    const Span<const uint8_t> &text
+    const mstd::span<const uint8_t> &language_code,
+    const mstd::span<const uint8_t> &text
 ) : _text_record(NULL),
     _text_record_size(0)
 {
@@ -82,8 +82,8 @@ Text &Text::operator=(const Text &other)
 
 void Text::set_text(
     encoding_t text_encoding,
-    const Span<const uint8_t> &language_code,
-    const Span<const uint8_t> &text
+    const mstd::span<const uint8_t> &language_code,
+    const mstd::span<const uint8_t> &text
 )
 {
     delete[] _text_record;
@@ -110,26 +110,26 @@ Text::encoding_t Text::get_encoding() const
     return (_text_record[header_index] & utf16_encoding_bit) ? UTF16 : UTF8;
 }
 
-Span<const uint8_t> Text::get_language_code() const
+mstd::span<const uint8_t> Text::get_language_code() const
 {
-    return make_const_Span(
+    return {
                _text_record + language_code_index,
-               _text_record[header_index] & language_code_size_mask
-           );
+               (unsigned) _text_record[header_index] & language_code_size_mask
+           };
 }
 
-Span<const uint8_t> Text::get_text() const
+mstd::span<const uint8_t> Text::get_text() const
 {
     if (!_text_record) {
-        return Span<const uint8_t>();
+        return {};
     }
 
     size_t language_code_size = get_language_code().size();
 
-    return make_const_Span(
+    return {
                _text_record + header_size + language_code_size,
                _text_record_size - header_size - language_code_size
-           );
+           };
 }
 
 void Text::move_data(uint8_t *text, size_t size)
@@ -186,7 +186,8 @@ bool TextParser::do_parse(const Record &record, Text &text)
     }
 
     // the record type value should be equal to `T`
-    if (record.type.value != make_const_Span(text_record_type_value) ||
+    if (!std::equal(std::begin(record.type.value), std::end(record.type.value),
+                    std::begin(text_record_type_value), std::end(text_record_type_value)) ||
             record.payload.empty()
        ) {
         return false;

@@ -17,7 +17,8 @@
 #ifndef FEATURES_NFC_SOURCE_NFC_COMMON_UTIL_H_
 #define FEATURES_NFC_SOURCE_NFC_COMMON_UTIL_H_
 
-#include "platform/Span.h"
+#include <stdint.h>
+#include <mstd_span>
 
 namespace mbed {
 namespace nfc {
@@ -30,32 +31,32 @@ namespace common {
  */
 
 /**
- * Convert a C-string into a Span<const uint8_t>.
+ * Convert a C-string into a mstd::span<const uint8_t>.
  *
  * @note The NULL charactere is not present in the resulting object.
  *
- * @param cstr The cstr to convert into a Span.
+ * @param cstr The cstr to convert into a mstd::span.
  *
- * @return A Span that views cstr but doesn't include the NULL terminator
+ * @return A mstd::span that views cstr but doesn't include the NULL terminator
  * character.
  */
 template<size_t N>
-Span < const uint8_t, N - 1 > span_from_cstr(const char (&cstr)[N])
+mstd::span < const uint8_t, N - 1 > span_from_cstr(const char (&cstr)[N])
 {
-    return Span < const uint8_t, N - 1 > ((const uint8_t *)cstr, N - 1);
+    return {reinterpret_cast<const uint8_t *>(cstr), N - 1};
 }
 
 /**
- * Convert a C-string into a Span<const uint8_t>.
+ * Convert a C-string into a mstd::span<const uint8_t>.
  *
  * @note The NULL charactere is not present in the resulting object.
  *
- * @param cstr The cstr to convert into a Span.
+ * @param cstr The cstr to convert into a mstd::span.
  *
- * @return A Span that views cstr but doesn't include the NULL terminator
+ * @return A mstd::span that views cstr but doesn't include the NULL terminator
  * character.
  */
-Span<const uint8_t> span_from_cstr(const char *cstr);
+mstd::span<const uint8_t> span_from_cstr(const char *cstr);
 
 /**
  * @}

@@ -18,8 +18,7 @@
 #define MBED_NFC_NDEF_CAPABLE_H
 
 #include <stdint.h>
-
-#include "platform/Span.h"
+#include <mstd_span>
 
 #include "NFCDefinitions.h"
 
@@ -45,7 +44,7 @@ public:
      * Construct a NFCNDEFCapable instance.
      * @param[in] buffer a bytes array used to store NDEF messages
      */
-    NFCNDEFCapable(const Span<uint8_t> &buffer);
+    NFCNDEFCapable(const mstd::span<uint8_t> &buffer);
 
     /**
      * Check if this instance actually supports NDEF content.
@@ -63,7 +62,7 @@ public:
          *
          * @param[in] buffer a buffer containing the message to parse
          */
-        virtual void parse_ndef_message(const Span<const uint8_t> &buffer) { }
+        virtual void parse_ndef_message(const mstd::span<const uint8_t> &buffer) { }
 
         /**
          * Build a NDEF message.
@@ -72,13 +71,13 @@ public:
          *
          * @return the number of bytes actually used
          */
-        virtual size_t build_ndef_message(const Span<uint8_t> &buffer)
+        virtual size_t build_ndef_message(const mstd::span<uint8_t> &buffer)
         {
             return 0;
         }
 
     protected:
-        ~Delegate() {}
+        ~Delegate() = default;
     };
 
 protected:
