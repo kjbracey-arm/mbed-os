@@ -28,8 +28,7 @@ static inline uint32_t align_down(bd_size_t val, bd_size_t size)
 }
 
 BufferedBlockDevice::BufferedBlockDevice(BlockDevice *bd)
-    : _bd(bd), _bd_program_size(0), _bd_read_size(0), _bd_size(0), _write_cache_addr(0), _write_cache_valid(false),
-      _write_cache(0), _read_buf(0), _init_ref_count(0), _is_initialized(false)
+    : _bd(bd)
 {
 }
 
@@ -40,9 +39,7 @@ BufferedBlockDevice::~BufferedBlockDevice()
 
 int BufferedBlockDevice::init()
 {
-    uint32_t val = core_util_atomic_incr_u32(&_init_ref_count, 1);
-
-    if (val != 1) {
+    if (++_init_ref_count != 1) {
         return BD_ERROR_OK;
     }
 
@@ -55,13 +52,10 @@ int BufferedBlockDevice::init()
     _bd_program_size = _bd->get_program_size();
     _bd_size = _bd->size();
 
-    if (!_write_cache) {
-        _write_cache = new uint8_t[_bd_program_size];
-    }
-
-    if (!_read_buf) {
-        _read_buf = new uint8_t[_bd_read_size];
-    }
+    _write_cache.reset(new uint8_t[_bd_program_size]);
+    // _write_cache = mstd::make_unique<uint8_t>(_bd_program_size); C++14
+    // _write_cache = mstd::make_unique_default_init<uint8_t>(_bd_program_size); C++20
+    _read_buf.reset(new uint8_t[_bd_read_size]);
 
     invalidate_write_cache();
 
@@ -75,16 +69,12 @@ int BufferedBlockDevice::deinit()
         return BD_ERROR_OK;
     }
 
-    uint32_t val = core_util_atomic_decr_u32(&_init_ref_count, 1);
-
-    if (val) {
+    if (--_init_ref_count != 0) {
         return BD_ERROR_OK;
     }
 
-    delete[] _write_cache;
-    _write_cache = 0;
-    delete[] _read_buf;
-    _read_buf = 0;
+    _write_cache = nullptr;
+    _read_buf = nullptr;
     _is_initialized = false;
     return _bd->deinit();
 }
@@ -97,7 +87,7 @@ int BufferedBlockDevice::flush()
     }
 
     if (_write_cache_valid) {
-        int ret = _bd->program(_write_cache, _write_cache_addr, _bd_program_size);
+        int ret = _bd->program(_write_cache.get(), _write_cache_addr, _bd_program_size);
         if (ret) {
             return ret;
         }
@@ -150,7 +140,7 @@ int BufferedBlockDevice::read(void *b, bd_addr_t addr, bd_size_t size)
         } else if ((addr >= _write_cache_addr) && (addr < _write_cache_addr + _bd_program_size)) {
             // One case we need to take our data from cache
             chunk = std::min(size, _bd_program_size - addr % _bd_program_size);
-            memcpy(buf, _write_cache + addr % _bd_program_size, chunk);
+            memcpy(buf, _write_cache.get() + addr % _bd_program_size, chunk);
             read_from_bd = false;
         } else {
             chunk = size;
@@ -163,8 +153,8 @@ int BufferedBlockDevice::read(void *b, bd_addr_t addr, bd_size_t size)
             int ret;
             if (offs_in_read_buf || (chunk < _bd_read_size)) {
                 chunk = std::min(chunk, _bd_read_size - offs_in_read_buf);
-                ret = _bd->read(_read_buf, addr - offs_in_read_buf, _bd_read_size);
-                memcpy(buf, _read_buf + offs_in_read_buf, chunk);
+                ret = _bd->read(_read_buf.get(), addr - offs_in_read_buf, _bd_read_size);
+                memcpy(buf, _read_buf.get() + offs_in_read_buf, chunk);
             } else {
                 chunk = align_down(chunk, _bd_read_size);
                 ret = _bd->read(buf, addr, chunk);
@@ -224,13 +214,13 @@ int BufferedBlockDevice::program(const void *b, bd_addr_t addr, bd_size_t size)
             // If cache not valid, and program doesn't cover an entire unit, it means we need to
             // read it from the underlying BD
             if (!_write_cache_valid) {
-                ret = _bd->read(_write_cache, _write_cache_addr, _bd_program_size);
+                ret = _bd->read(_write_cache.get(), _write_cache_addr, _bd_program_size);
                 if (ret) {
                     return ret;
                 }
             }
-            memcpy(_write_cache + offs_in_buf, buf, chunk);
-            prog_buf = _write_cache;
+            memcpy(_write_cache.get() + offs_in_buf, buf, chunk);
+            prog_buf = _write_cache.get();
         } else {
             prog_buf = buf;
         }

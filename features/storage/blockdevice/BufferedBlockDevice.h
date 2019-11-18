@@ -27,6 +27,8 @@
 #define MBED_BUFFERED_BLOCK_DEVICE_H
 
 #include "BlockDevice.h"
+#include <mstd_memory>
+#include <mstd_atomic>
 
 namespace mbed {
 
@@ -161,15 +163,15 @@ public:
 
 protected:
     BlockDevice *_bd;
-    bd_size_t _bd_program_size;
-    bd_size_t _bd_read_size;
-    bd_size_t _bd_size;
-    bd_size_t _write_cache_addr;
-    bool _write_cache_valid;
-    uint8_t *_write_cache;
-    uint8_t *_read_buf;
-    uint32_t _init_ref_count;
-    bool _is_initialized;
+    bd_size_t _bd_program_size{0};
+    bd_size_t _bd_read_size{0};
+    bd_size_t _bd_size{0};
+    bd_size_t _write_cache_addr{0};
+    bool _write_cache_valid{false};
+    mstd::unique_ptr<uint8_t[]> _write_cache;
+    mstd::unique_ptr<uint8_t[]> _read_buf;
+    mstd::atomic_uint32_t _init_ref_count{0};
+    bool _is_initialized{false};
 
 #if !(DOXYGEN_ONLY)
     /** Flush data in cache
