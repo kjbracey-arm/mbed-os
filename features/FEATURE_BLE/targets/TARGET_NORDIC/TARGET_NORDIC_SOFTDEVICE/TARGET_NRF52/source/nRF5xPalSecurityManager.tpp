@@ -113,11 +113,7 @@ ble_error_t nRF5xSecurityManager<EventHandler>::initialize_()
     // Note: we do not use the object on the stack as the CryptoToolbox is quite large
     // Please do not change or we risk a stack overflow.
     CryptoToolbox* crypto = new CryptoToolbox();
-    bool success = crypto->generate_keys(
-        make_Span(X),
-        make_Span(Y),
-        make_Span(secret)
-    );
+    bool success = crypto->generate_keys(X, Y, secret);
     delete crypto;
 
     return success ? BLE_ERROR_NONE : BLE_ERROR_INTERNAL_STACK_FAILURE;

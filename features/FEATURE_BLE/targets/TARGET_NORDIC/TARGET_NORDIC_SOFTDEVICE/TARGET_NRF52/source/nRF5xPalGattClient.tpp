@@ -781,7 +781,7 @@ struct nRF5xGattClient<EventHandler>::DiscoverPrimaryServiceByUUIDProcedure : Re
             {
                 attribute_data_t result = {
                     to_ble_handle_range(services[i].handle_range),
-                    make_Span(uuid.getBaseUUID(), uuid.getLen())
+                    {uuid.getBaseUUID(), uuid.getLen()}
                 };
                 return result;
             }

@@ -409,10 +409,7 @@ private:
         {
             return SimpleAttFindInformationResponse(
                 static_cast<SimpleAttFindInformationResponse::Format>(event->pValue[0]),
-                make_const_Span(
-                    event->pValue + 1,
-                    event->valueLen - 1
-                )
+                {event->pValue + 1, event->valueLen - 1}
             );
         }
     };
@@ -423,12 +420,7 @@ private:
     struct FindByTypeValueResponseConverter : ResponseConverter<ATTC_FIND_BY_TYPE_VALUE_RSP> {
         static SimpleAttFindByTypeValueResponse convert(const attEvt_t* event)
         {
-            return SimpleAttFindByTypeValueResponse(
-                make_const_Span(
-                    event->pValue,
-                    event->valueLen
-                )
-            );
+            return SimpleAttFindByTypeValueResponse({event->pValue, event->valueLen});
         }
     };
 
@@ -440,10 +432,7 @@ private:
         {
             return SimpleAttReadByTypeResponse(
                 event->pValue[0],
-                make_const_Span(
-                    event->pValue + 1,
-                    event->valueLen - 1
-                )
+                {event->pValue + 1, event->valueLen - 1}
             );
         }
     };
@@ -454,12 +443,7 @@ private:
     struct ReadResponseConverter : ResponseConverter<ATTC_READ_RSP> {
         static AttReadResponse convert(const attEvt_t* event)
         {
-            return AttReadResponse(
-                make_const_Span(
-                    event->pValue,
-                    event->valueLen
-                )
-            );
+            return AttReadResponse({event->pValue, event->valueLen});
         }
     };
 
@@ -469,12 +453,7 @@ private:
     struct ReadBlobResponseConverter : ResponseConverter<ATTC_READ_LONG_RSP> {
         static AttReadBlobResponse convert(const attEvt_t* event)
         {
-            return AttReadBlobResponse(
-                make_const_Span(
-                    event->pValue,
-                    event->valueLen
-                )
-            );
+            return AttReadBlobResponse({event->pValue, event->valueLen});
         }
     };
 
@@ -484,12 +463,7 @@ private:
     struct ReadMultipleResponseConverter : ResponseConverter<ATTC_READ_MULTIPLE_RSP> {
         static AttReadMultipleResponse convert(const attEvt_t* event)
         {
-            return AttReadMultipleResponse(
-                make_const_Span(
-                    event->pValue,
-                    event->valueLen
-                )
-            );
+            return AttReadMultipleResponse({event->pValue, event->valueLen});
         }
     };
 
@@ -501,10 +475,7 @@ private:
         {
             return SimpleAttReadByGroupTypeResponse(
                 event->pValue[0],
-                make_const_Span(
-                    event->pValue + 1,
-                    event->valueLen - 1
-                )
+                {event->pValue + 1, event->valueLen - 1}
             );
         }
     };
@@ -530,10 +501,7 @@ private:
                 event->handle,
                 to_uint16_t(event->pValue + 2),
                 // FIXME: the stack set the lenght to 0, the data won't be seen ...
-                make_const_Span(
-                    event->pValue + 4,
-                    event->valueLen
-                )
+                {event->pValue + 4, event->valueLen}
             );
         }
     };
@@ -556,10 +524,7 @@ private:
         {
             return AttHandleValueNotification(
                 event->handle,
-                make_const_Span(
-                    event->pValue,
-                    event->valueLen
-                )
+                {event->pValue, event->valueLen}
             );
         }
     };
@@ -572,10 +537,7 @@ private:
         {
             return AttHandleValueIndication(
                 event->handle,
-                make_const_Span(
-                    event->pValue,
-                    event->valueLen
-                )
+                {event->pValue, event->valueLen}
             );
         }
     };

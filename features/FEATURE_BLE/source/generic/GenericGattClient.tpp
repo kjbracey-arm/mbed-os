@@ -729,10 +729,10 @@ struct GenericGattClient<TPalGattClient, SigningMonitorEventHandler>::WriteContr
 		if (offset < len) {
 			err = client->_pal_client->queue_prepare_write(
 				connection_handle, attribute_handle,
-				make_const_Span(
+				{
 					data + offset,
 					std::min((len - offset), (mtu_size - 5))
-				),
+				},
 				offset
 			);
 		} else {
@@ -1135,7 +1135,7 @@ ble_error_t GenericGattClient<TPalGattClient, SigningMonitorEventHandler>::write
         return _pal_client->write_without_response(
             connection_handle,
             attribute_handle,
-            make_const_Span(value, length)
+            {value, length}
         );
 #if BLE_FEATURE_SIGNING
 	} else if (cmd == Base::GATT_OP_SIGNED_WRITE_CMD) {
@@ -1145,7 +1145,7 @@ ble_error_t GenericGattClient<TPalGattClient, SigningMonitorEventHandler>::write
         ble_error_t status = _pal_client->signed_write_without_response(
             connection_handle,
             attribute_handle,
-            make_const_Span(value, length)
+            {value, length}
         );
 
         if (_signing_event_handler && (status == BLE_ERROR_NONE)) {
@@ -1183,14 +1183,14 @@ ble_error_t GenericGattClient<TPalGattClient, SigningMonitorEventHandler>::write
             err = _pal_client->queue_prepare_write(
                 connection_handle,
                 attribute_handle,
-                make_const_Span(value, mtu - PREPARE_WRITE_HEADER_LENGTH),
+                {value, mtu - PREPARE_WRITE_HEADER_LENGTH},
                 /* offset */0
             );
         } else {
             err = _pal_client->write_attribute(
                 connection_handle,
                 attribute_handle,
-                make_const_Span(value, length)
+                {value, length}
             );
         }
 

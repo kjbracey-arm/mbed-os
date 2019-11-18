@@ -605,10 +605,10 @@ struct nRF5xGattClient<EventHandler>::DiscoverPrimaryServiceProcedure : GattProc
             {
                 attribute_data_t result = {
                     to_ble_handle_range(services[i].handle_range),
-                    make_const_Span(
+                    {
                         reinterpret_cast<const uint8_t*>(&services[i].uuid.uuid),
                         sizeof(uint16_t)
-                    )
+                    }
                 };
                 return result;
             }
@@ -692,10 +692,10 @@ struct nRF5xGattClient<EventHandler>::DiscoverPrimaryServiceProcedure : GattProc
         if (idx == count) {
             terminate(SimpleAttReadByGroupTypeResponse(
                 sizeof(packed_discovery_response_t),
-                make_const_Span(
+                {
                     reinterpret_cast<const uint8_t*>(response),
                     count * sizeof(packed_discovery_response_t)
-                ))
+                })
             );
         } else {
             read_service_uuid();
@@ -779,7 +779,7 @@ struct nRF5xGattClient<EventHandler>::DiscoverPrimaryServiceByUUIDProcedure : Re
             {
                 attribute_data_t result = {
                     to_ble_handle_range(services[i].handle_range),
-                    make_Span(uuid.getBaseUUID(), uuid.getLen())
+                    {uuid.getBaseUUID(), uuid.getLen()}
                 };
                 return result;
             }
@@ -860,7 +860,7 @@ struct nRF5xGattClient<EventHandler>::FindIncludedServicesProcedure : RegularGat
 
         terminate(SimpleAttReadByTypeResponse(
             element_size,
-            make_const_Span(buffer, buffer_size)
+            {buffer, buffer_size}
         ));
 
         delete[] buffer;
@@ -1031,10 +1031,10 @@ struct nRF5xGattClient<EventHandler>::DiscoverCharacteristicsProcedure : GattPro
     void forward_response_and_terminate() {
         terminate(SimpleAttReadByTypeResponse(
             _response.element_size,
-            make_const_Span(
+            {
                 _response.buffer,
                 _response.element_size * _response.count
-            )
+            }
         ));
     }
 
@@ -1223,7 +1223,7 @@ struct nRF5xGattClient<EventHandler>::ReadAttributeProcedure : RegularGattProced
             return;
         }
 
-        terminate(AttReadResponse(make_const_Span(rsp.data, rsp.len)));
+        terminate(AttReadResponse({rsp.data, rsp.len}));
     }
 };
 
@@ -1278,10 +1278,10 @@ struct nRF5xGattClient<EventHandler>::ReadUsingCharacteristicUUIDProcedure : Reg
 
         terminate(SimpleAttReadByTypeResponse(
             element_size,
-            make_const_Span(
+            {
                 rsp.handle_value,
                 rsp.count * element_size
-            )
+            }
         ));
     }
 
@@ -1304,10 +1304,10 @@ struct nRF5xGattClient<EventHandler>::ReadUsingCharacteristicUUIDProcedure : Reg
             {
                 attribute_data_t result = {
                     response.handle_value[i].handle,
-                    make_const_Span(
+                    {
                         response.handle_value[i].p_value,
                         response.value_len
-                    )
+                    }
                 };
                 return result;
             }
@@ -1345,10 +1345,10 @@ struct nRF5xGattClient<EventHandler>::ReadAttributeBlobProcedure : RegularGattPr
 
     virtual void do_handle(const ble_gattc_evt_t &evt)
     {
-        terminate(AttReadBlobResponse(make_const_Span(
+        terminate(AttReadBlobResponse({
             evt.params.read_rsp.data,
             evt.params.read_rsp.len
-        )));
+        }));
     }
 };
 
@@ -1381,10 +1381,10 @@ struct nRF5xGattClient<EventHandler>::ReadMultipleCharacteristicsProcedure : Reg
 
     virtual void do_handle(const ble_gattc_evt_t &evt)
     {
-        terminate(AttReadMultipleResponse(make_const_Span(
+        terminate(AttReadMultipleResponse({
             evt.params.char_vals_read_rsp.values,
             evt.params.char_vals_read_rsp.len
-        )));
+        }));
     }
 };
 
@@ -1472,7 +1472,7 @@ struct nRF5xGattClient<EventHandler>::QueuePrepareWriteProcedure : RegularGattPr
         terminate(AttPrepareWriteResponse(
             response.handle,
             response.offset,
-            make_const_Span(response.data, response.len)
+            {response.data, response.len}
         ));
     }
 };
@@ -1730,7 +1730,7 @@ void nRF5xGattClient<EventHandler>::handle_hvx_event(const ble_evt_t &evt)
                 connection,
                 AttHandleValueNotification(
                     hvx_evt.handle,
-                    make_const_Span(hvx_evt.data, hvx_evt.len)
+                    {hvx_evt.data, hvx_evt.len}
                 )
             );
             return;
@@ -1741,7 +1741,7 @@ void nRF5xGattClient<EventHandler>::handle_hvx_event(const ble_evt_t &evt)
                 connection,
                 AttHandleValueIndication(
                     hvx_evt.handle,
-                    make_const_Span(hvx_evt.data, hvx_evt.len)
+                    {hvx_evt.data, hvx_evt.len}
                 )
             );
             return;

@@ -262,7 +262,7 @@ ble_error_t AdvertisingDataBuilder::setServiceData(
 
     /* this will insert only the UUID (and remove old data) */
     ble_error_t status = setUUIDData(
-        mbed::make_Span(&service, 1),
+        {&service, 1},
         short_type,
         long_type
     );
@@ -315,10 +315,10 @@ ble_error_t AdvertisingDataBuilder::getData(
     adv_data_type_t advDataType
 )
 {
-    uint8_t *field = findField(advDataType);
+    const uint8_t *field = findField(advDataType);
     if (field) {
         uint8_t data_length = field[0] - 1 /* skip type */;
-        data = mbed::make_Span((const uint8_t *) (field + FIELD_HEADER_SIZE), data_length);
+        data = {field + FIELD_HEADER_SIZE, data_length};
         return BLE_ERROR_NONE;
     } else {
         return BLE_ERROR_NOT_FOUND;

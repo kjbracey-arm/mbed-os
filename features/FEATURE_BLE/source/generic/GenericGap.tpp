@@ -2972,7 +2972,7 @@ void GenericGap<PalGapImpl, PalSecurityManager, ConnectionEventMonitorEventHandl
                 periodic_advertising_interval,
                 (ble::peer_address_type_t::type) direct_address_type.value(),
                 (BLEProtocol::AddressBytes_t &) direct_address,
-                make_Span(data, data_length)
+                {data, data_length}
             )
         );
     } else {
@@ -3064,7 +3064,7 @@ void GenericGap<PalGapImpl, PalSecurityManager, ConnectionEventMonitorEventHandl
             tx_power,
             rssi,
             data_status,
-            make_const_Span(data, data_length)
+            {data, data_length}
         )
     );
 }

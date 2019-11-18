@@ -219,7 +219,7 @@ public:
     )
     {
         ble_error_t res = _builder.setLocalServiceList(
-                mbed::make_Span(&data, 1), complete
+                {&data, 1}, complete
             );
         MBED_ASSERT(res == BLE_ERROR_NONE);
         return *this;
@@ -258,7 +258,7 @@ public:
      */
     AdvertisingDataSimpleBuilder &setRequestedService(const UUID& data)
     {
-        ble_error_t res = _builder.setRequestedServiceList(mbed::make_Span(&data, 1));
+        ble_error_t res = _builder.setRequestedServiceList({&data, 1});
         MBED_ASSERT(res == BLE_ERROR_NONE);
         return *this;
     }
