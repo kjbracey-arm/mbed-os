@@ -56,7 +56,7 @@ constexpr const T &min(const T &a, const T &b)
     return b < a ? b : a;
 }
 
-template <typename T>
+template <typename T, class Compare>
 constexpr const T &min(const T &a, const T &b, Compare comp)
 {
     return comp(b, a) ? b : a;
@@ -178,7 +178,7 @@ bool equal(RandomAccessIterator1 first1, RandomAccessIterator1 last1,
     if (last1 - first1 != last2 - first2) {
         return false;
     }
-    return equal(first1, last1, first2);
+    return std::equal(first1, last1, first2);
 }
 
 template<class RandomAccessIterator1, class RandomAccessIterator2, class BinaryPredicate>
@@ -191,7 +191,7 @@ bool equal(RandomAccessIterator1 first1, RandomAccessIterator1 last1,
     if (last1 - first1 != last2 - first2) {
         return false;
     }
-    return equal(first1, last1, first2, pred);
+    return std::equal(first1, last1, first2, pred);
 }
 
 template<class InputIterator1, class InputIterator2>
