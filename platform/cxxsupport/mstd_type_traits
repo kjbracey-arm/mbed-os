@@ -92,6 +92,10 @@ using false_type = integral_constant<bool, false>;
 
 namespace mstd {
 
+using std::integral_constant;
+using std::true_type;
+using std::false_type;
+
 /* C++20 type identity */
 template<typename T>
 struct type_identity {
