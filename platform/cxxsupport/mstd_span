@@ -18,9 +18,12 @@
 #ifndef MSTD_SPAN_H_
 #define MSTD_SPAN_H_
 
-#include <algorithm>
-#include <stddef.h>
-#include <stdint.h>
+#include <mstd_array>
+#include <mstd_algorithm>
+#include <mstd_cstddef>
+#include <mstd_iterator>
+#include <mstd_type_traits>
+#include <mstd_utility>
 
 #include "platform/mbed_assert.h"
 
@@ -34,7 +37,6 @@ namespace mstd {
  * @{
  */
 
-#if defined(DOXYGEN_ONLY)
 /**
  * Special value for the Extent parameter of span.
  * If the type uses this value, then the size of the array is stored in the object
@@ -42,11 +44,117 @@ namespace mstd {
  *
  * @relates span
  */
-const ptrdiff_t SPAN_DYNAMIC_EXTENT = -1;
-#else
-#define SPAN_DYNAMIC_EXTENT -1
-#endif
+constexpr size_t dynamic_extent = size_t(-1);
 
+template<typename ElementType, size_t Extent>
+class span;
+
+namespace impl {
+template <typename ElementType, size_t Extent>
+class span_base {
+    ElementType *data_;
+public:
+    // We must have a constexpr constructor to be a literal type, so
+    // MBED_CONSTEXPR_14_FN not used.
+    constexpr span_base(ElementType *ptr, MBED_UNUSED size_t count) noexcept : data_(ptr)
+    {
+#if defined MBED_DEBUG && __cplusplus >= 201402
+        MBED_ASSERT(count == Extent);
+        MBED_ASSERT(Extent == 0 || ptr != nullptr);
+#endif
+    }
+
+    /**
+     * Return a pointer to the first element of the sequence or nullptr if the span
+     * is empty().
+     *
+     * @return The pointer to the first element of the span.
+     */
+    constexpr ElementType *data() const noexcept
+    {
+        return data_;
+    }
+
+    /**
+     * Return the size of the array viewed.
+     *
+     * @return The number of elements present in the array viewed.
+     */
+    constexpr size_t size() const noexcept
+    {
+        return Extent;
+    }
+};
+
+template <typename ElementType>
+class span_base<ElementType, dynamic_extent> {
+    ElementType *data_;
+    size_t size_;
+public:
+    // We must have a constexpr constructor to be a literal type, so
+    // MBED_CONSTEXPR_14_FN not used.
+    constexpr span_base(ElementType *ptr, size_t count) noexcept : data_(ptr), size_(count)
+    {
+#if defined MBED_DEBUG && __cplusplus >= 201402
+        MBED_ASSERT(count == 0 || ptr != nullptr);
+#endif
+    }
+
+    /**
+     * Return a pointer to the first element of the sequence or nullptr if the span
+     * is empty().
+     *
+     * @return The pointer to the first element of the span.
+     */
+    constexpr ElementType *data() const noexcept
+    {
+        return data_;
+    }
+
+    constexpr size_t size() const noexcept
+    {
+        return size_;
+    }
+};
+
+template <typename>
+struct is_span : false_type { };
+
+template <typename ElementType, size_t Extent>
+struct is_span<mstd::span<ElementType, Extent>> : true_type { };
+
+template <typename>
+struct is_mstd_array : false_type { };
+
+template <typename ElementType, size_t Extent>
+struct is_mstd_array<mstd::array<ElementType, Extent>> : true_type { };
+
+template <typename, typename = void>
+struct has_data_and_size : false_type { };
+
+template <typename T>
+struct has_data_and_size<T,
+    void_t<decltype(mstd::data(mstd::declval<T &>())),
+           decltype(mstd::size(mstd::declval<T &>()))>
+    > : true_type { };
+
+template <typename Container, typename ElementType>
+struct has_convertible_data :
+        is_convertible<
+            remove_pointer_t<decltype(mstd::data(mstd::declval<Container &>()))>(*)[],
+            ElementType(*)[]> { };
+
+template <typename Container, typename ElementType>
+struct is_spannable_container :
+        conjunction<
+            negation<is_span<remove_const_t<Container>>>,
+            negation<is_mstd_array<remove_const_t<Container>>>,
+            negation<is_array<Container>>,
+            has_data_and_size<Container>,
+            has_convertible_data<Container, ElementType>
+        > { };
+
+}
 /**
  * Nonowning view to a sequence of contiguous elements.
  *
@@ -76,7 +184,7 @@ const ptrdiff_t SPAN_DYNAMIC_EXTENT = -1;
  *   - span<uint8_t>: span over an arbitrary long sequence.
  *
  * When the size is encoded in the type itself, it is guaranteed that the span
- * view is a valid sequence (not empty() and not nullptr) - unless Extent equals 0.
+ * view is a valid sequence (so data() cannot be nullptr unless Extent equals 0).
  * The type system also prevents automatic conversion from span of different
  * sizes. Finally, the span object is internally represented as a single pointer.
  *
@@ -87,7 +195,7 @@ const ptrdiff_t SPAN_DYNAMIC_EXTENT = -1;
  * @par Example
  *
  * - Encoding fixed size array: Array values in parameter decays automatically
- * to pointer, which leaves room for subtitle bugs:
+ * to pointer, which leaves room for subtle bugs:
  *
  * @code
     typedef uint8_t mac_address_t[6];
@@ -119,7 +227,9 @@ const ptrdiff_t SPAN_DYNAMIC_EXTENT = -1;
 
     struct parsed_value_t {
        uint8_t *header;
+       size_t header_size;
        uint8_t *options;
+       size_t options_size;
        uint8_t *payload;
        size_t payload_size;
     }
@@ -136,12 +246,13 @@ const ptrdiff_t SPAN_DYNAMIC_EXTENT = -1;
        parsed_value.header_size = BUFFER_HEADER_SIZE;
 
        if (memcmp(buffer + HEADER_OPTIONS_INDEX, options_tag, sizeof(options_tag)) == 0) {
-           options = buffer + BUFFER_HEADER_SIZE;
-           payload = buffer + BUFFER_HEADER_SIZE + OPTIONS_SIZE;
-           payload_size = buffer_size - BUFFER_HEADER_SIZE + OPTIONS_SIZE;
+           parsed_value.options = buffer + BUFFER_HEADER_SIZE;
+           parsed_value.options_size = OPTIONS_SIZE;
+           parsed_value.payload = buffer + BUFFER_HEADER_SIZE + OPTIONS_SIZE;
+           parsed_value.payload_size = buffer_size - BUFFER_HEADER_SIZE + OPTIONS_SIZE;
        } else {
-           payload = buffer + BUFFER_HEADER_SIZE;
-           payload_size = buffer_size - BUFFER_HEADER_SIZE;
+           parsed_value.payload = buffer + BUFFER_HEADER_SIZE;
+           parsed_value.payload_size = buffer_size - BUFFER_HEADER_SIZE;
        }
 
        return parsed_value;
@@ -184,54 +295,62 @@ const ptrdiff_t SPAN_DYNAMIC_EXTENT = -1;
  * @tparam ElementType type of objects the span views.
  *
  * @tparam Extent The size of the contiguous sequence viewed. The default value
- * SPAN_DYNAMIC_SIZE  is special because it allows construction of span objects of
+ * dynamic_extent  is special because it allows construction of span objects of
  * any size (set at runtime).
  */
-template<typename ElementType, ptrdiff_t Extent = SPAN_DYNAMIC_EXTENT>
-struct span {
+template<typename ElementType, size_t Extent = dynamic_extent>
+class span : public impl::span_base<ElementType, Extent> {
+    typedef impl::span_base<ElementType, Extent> base;
 
+public:
     /**
      * Type of the element contained
      */
     typedef ElementType element_type;
 
+    typedef remove_cv_t<ElementType> value_type;
+
     /**
      * Type of the index.
      */
-    typedef ptrdiff_t index_type;
+    typedef size_t size_type; // Paper P1872R0 (2019-09-16)
+    typedef size_t index_type; // C++20 draft N4835 (2019-10-08)
+    typedef ptrdiff_t difference_type;
 
     /**
      * Pointer to an ElementType
      */
     typedef element_type *pointer;
+    typedef const element_type *const_pointer;
 
     /**
      * Reference to an ElementType
      */
     typedef element_type &reference;
+    typedef const element_type &const_reference;
+
+    typedef pointer iterator;
+    typedef const_pointer const_iterator;
+    typedef mstd::reverse_iterator<iterator> reverse_iterator;
+    typedef mstd::reverse_iterator<const_iterator> const_reverse_iterator;
 
     /**
      * Size of the Extent; -1 if dynamic.
      */
-    static const index_type extent = Extent;
-
-    static_assert(Extent >= 0, "Invalid extent for a span");
+    static constexpr size_type extent = Extent;
 
     /**
      * Construct an empty span.
      *
      * @post a call to size() returns 0, and data() returns nullptr.
      *
-     * @note This function is not accessible if Extent != SPAN_DYNAMIC_EXTENT or
+     * @note This function is not accessible if Extent != dynamic_extent or
      * Extent != 0 .
      */
-    span() :
-        _data(nullptr)
+    template <size_type Ext = Extent, enable_if_t<Ext == 0 || Ext == dynamic_extent, bool> = true>
+    constexpr span() noexcept :
+        base(nullptr, 0)
     {
-        static_assert(
-            Extent == 0,
-            "Cannot default construct a static-extent span (unless Extent is 0)"
-        );
     }
 
     /**
@@ -246,11 +365,9 @@ struct span {
      *
      * @post a call to size() returns Extent, and data() returns @p ptr.
      */
-    span(pointer ptr, index_type count) :
-        _data(ptr)
+    constexpr span(pointer ptr, size_type count) :
+        base(ptr, count)
     {
-        MBED_ASSERT(count == Extent);
-        MBED_ASSERT(Extent == 0 || ptr != nullptr);
     }
 
     /**
@@ -261,16 +378,16 @@ struct span {
      *
      * @pre [first, last) must be be a valid range.
      * @pre first <= last.
-     * @pre last - first must be equal to Extent.
+     * @pre if extent != dynamic_extent, last - first must be equal to Extent.
      *
      * @post a call to size() returns Extent, and data() returns @p first.
      */
-    span(pointer first, pointer last) :
-        _data(first)
+    constexpr span(pointer first, pointer last) :
+        base(first, last - first)
     {
+#if defined MBED_DEBUG && __cplusplus >= 201402
         MBED_ASSERT(first <= last);
-        MBED_ASSERT((last - first) == Extent);
-        MBED_ASSERT(Extent == 0 || first != nullptr);
+#endif
     }
 
     // AStyle ignore, not handling correctly below
@@ -278,42 +395,82 @@ struct span {
     /**
      * Construct a span from the reference to an array.
      *
-     * @param elements Reference to the array viewed.
+     * @param arr Reference to the array viewed.
      *
      * @post a call to size() returns Extent, and data() returns a
      * pointer to elements.
      */
-    span(element_type (&elements)[Extent]):
-        _data(elements) { }
+    template <size_t N,
+        enable_if_t<extent == dynamic_extent || N == extent, bool> = true>
+    constexpr span(element_type (&arr)[N]) noexcept :
+        base(mstd::data(arr), N) { }
+
+    template <size_t N,
+        enable_if_t<(extent == dynamic_extent || N == extent) &&
+                    is_convertible<value_type *, element_type *>::value, bool> = true>
+    constexpr span(mstd::array<value_type, N> &arr) noexcept :
+        base(mstd::data(arr), N)
+    {
+    }
+
+    template <size_t N,
+        enable_if_t<(extent == dynamic_extent || N == extent) &&
+                    is_convertible<const value_type *, element_type *>::value, bool> = true>
+    constexpr span(const mstd::array<value_type, N> &arr) noexcept :
+        base(mstd::data(arr), N)
+    {
+    }
+
 
     /**
-     * Construct a span object from another span of the same size.
+     * Construct a span object from another span.
      *
      * @param other The span object used to construct this.
      *
-     * @note For span with a positive extent, this function is not accessible.
+     * @note This span must have dynamic or matching extent.
      *
      * @note OtherElementType(*)[] must be convertible to ElementType(*)[].
      */
-    template<typename OtherElementType>
-    span(const span<OtherElementType, Extent> &other):
-        _data(other.data())
+    template<typename OtherElementType, size_t OtherExtent,
+             enable_if_t<(Extent == dynamic_extent || Extent == OtherExtent) &&
+                         is_convertible<OtherElementType (*)[], ElementType (*)[]>::value, bool> = true>
+    constexpr span(const span<OtherElementType, OtherExtent> &other) noexcept :
+        base(other.data(), other.size())
     {
-        static_assert(
-            (is_convertible<OtherElementType (*)[1], ElementType (*)[1]>::value),
-            "OtherElementType(*)[] should be convertible to ElementType (*)[]"
-        );
+    }
+
+    template <class Container,
+              enable_if_t<extent == dynamic_extent &&
+                          impl::is_spannable_container<Container, ElementType>::value, bool> = true>
+    constexpr span(Container &cont):
+        base(mstd::data(cont), mstd::size(cont))
+    {
+    }
+
+    template <class Container,
+              enable_if_t<extent == dynamic_extent &&
+                          impl::is_spannable_container<const Container, ElementType>::value, bool> = true>
+    constexpr span(const Container &cont):
+        base(mstd::data(cont), mstd::size(cont))
+    {
     }
     // *INDENT-ON*
 
+    ~span() noexcept = default;
+
+    constexpr span(const span &other) noexcept = default;
+
+    using base::size;
+    using base::data;
+
     /**
-     * Return the size of the sequence viewed.
+     * Return the size of the sequence viewed in bytes.
      *
-     * @return The size of the sequence viewed.
+     * @return The size of the sequence viewed in bytes.
      */
-    index_type size() const
+    constexpr size_type size_bytes() const
     {
-        return Extent;
+        return size() * sizeof(element_type);
     }
 
     /**
@@ -321,37 +478,42 @@ struct span {
      *
      * @return true if the sequence is empty and false otherwise.
      */
-    bool empty() const
+    constexpr bool empty() const noexcept
     {
         return size() == 0;
     }
 
-    /**
-     * Returns a reference to the element at position @p index.
-     *
-     * @param index Index of the element to access.
-     *
-     * @return A reference to the element at the index specified in input.
-     *
-     * @pre 0 <= index < Extent.
-     */
-    reference operator[](index_type index) const
+    constexpr reference front() const
     {
-#ifdef MBED_DEBUG
-        MBED_ASSERT(0 <= index && index < Extent);
+#if defined MBED_DEBUG && __cplusplus >= 201402
+        MBED_ASSERT(!empty());
 #endif
-        return _data[index];
+        return *data();
+    }
+
+    constexpr reference back() const
+    {
+#if defined MBED_DEBUG && __cplusplus >= 201402
+        MBED_ASSERT(!empty());
+#endif
+        return *(data() + (size() - 1));
     }
 
     /**
-     * Return a pointer to the first element of the sequence or nullptr if the span
-     * is empty().
+     * Returns a reference to the element at position @p idx.
      *
-     * @return The pointer to the first element of the span.
+     * @param idx Index of the element to access.
+     *
+     * @return A reference to the element at the index specified in input.
+     *
+     * @pre idx < Extent.
      */
-    pointer data() const
+    constexpr reference operator[](size_type idx) const
     {
-        return _data;
+#if defined MBED_DEBUG && __cplusplus >= 201402
+        MBED_ASSERT(idx < size());
+#endif
+        return *(data() + idx);
     }
 
     /**
@@ -361,16 +523,19 @@ struct span {
      *
      * @return A new span over the first @p Count elements.
      *
-     * @pre Count >= 0 && Count <= size().
+     * @pre Count <= size().
      */
-    template<ptrdiff_t Count>
-    span<element_type, Count> first() const
+    template<size_t Count>
+    MSTD_CONSTEXPR_FN_14 span<element_type, Count> first() const
     {
         static_assert(
-            (0 <= Count) && (Count <= Extent),
+            Extent == dynamic_extent || Count <= Extent,
             "Invalid subspan extent"
         );
-        return span<element_type, Count>(_data, Count);
+#ifdef MBED_DEBUG
+        MBED_ASSERT(Count <= size());
+#endif
+        return {data(), Count};
     }
 
     /**
@@ -380,16 +545,19 @@ struct span {
      *
      * @return A new span over the last @p Count elements.
      *
-     * @pre Count >= 0 && Count <= size().
+     * @pre Count <= size().
      */
-    template<ptrdiff_t Count>
-    span<element_type, Count> last() const
+    template<size_t Count>
+    MSTD_CONSTEXPR_FN_14 span<element_type, Count> last() const
     {
         static_assert(
-            (0 <= Count) && (Count <= Extent),
+                Extent == dynamic_extent || Count <= Extent,
             "Invalid subspan extent"
         );
-        return span<element_type, Count>(_data + (Extent - Count), Count);
+#ifdef MBED_DEBUG
+        MBED_ASSERT(Count <= size());
+#endif
+        return {data() + (size() - Count), Count};
     }
 
     // AStyle ignore, not handling correctly below
@@ -401,28 +569,39 @@ struct span {
      * @tparam Offset The offset of the first element viewed by the subspan.
      *
      * @tparam Count The number of elements present in the subspan. If Count
-     * is equal to SPAN_DYNAMIC_EXTENT, then a span starting at offset and
+     * is equal to dynamic_extent, then a span starting at offset and
      * containing the rest of the elements is returned.
      *
      * @return A subspan of this starting at Offset and Count long.
      */
-    template<std::ptrdiff_t Offset, std::ptrdiff_t Count>
-    span<element_type, Count == SPAN_DYNAMIC_EXTENT ? Extent - Offset : Count>
+    template<size_t Offset, size_t Count = dynamic_extent>
+    MSTD_CONSTEXPR_FN_14 span<element_type,
+                           Count != dynamic_extent ? Count :
+                                                     (Extent != dynamic_extent ? Extent - Offset
+                                                                               : dynamic_extent)>
     subspan() const
     {
         static_assert(
-            0 <= Offset && Offset <= Extent,
+            Extent == dynamic_extent || Offset <= Extent,
             "Invalid subspan offset"
         );
         static_assert(
-            (Count == SPAN_DYNAMIC_EXTENT) ||
-            (0 <= Count && (Count + Offset) <= Extent),
+            Extent == dynamic_extent ||
+            (Count == dynamic_extent) ||
+            ((Count + Offset) <= Extent),
             "Invalid subspan count"
         );
-        return span<element_type, Count == SPAN_DYNAMIC_EXTENT ? Extent - Offset : Count>(
-            _data + Offset,
-            Count == SPAN_DYNAMIC_EXTENT ? Extent - Offset : Count
+#ifdef MBED_DEBUG
+        MBED_ASSERT(Offset <= size());
+        MBED_ASSERT(
+            (Count == dynamic_extent) ||
+            ((Count + Offset) <= size())
         );
+#endif
+        return {
+            data() + Offset,
+            Count != dynamic_extent ? Count : size() - Offset
+        };
     }
     // *INDENT-ON*
 
@@ -433,10 +612,12 @@ struct span {
      *
      * @return A new span over the first @p count elements.
      */
-    span<element_type, SPAN_DYNAMIC_EXTENT> first(index_type count) const
+    MSTD_CONSTEXPR_FN_14 span<element_type, dynamic_extent>first(size_type count) const
     {
-        MBED_ASSERT(0 <= count && count <= Extent);
-        return span<element_type, SPAN_DYNAMIC_EXTENT>(_data, count);
+#ifdef MBED_DEBUG
+        MBED_ASSERT(count <= size());
+#endif
+        return {data(), count};
     }
 
     /**
@@ -446,13 +627,12 @@ struct span {
      *
      * @return A new span over the last @p count elements.
      */
-    span<element_type, SPAN_DYNAMIC_EXTENT> last(index_type count) const
+    MSTD_CONSTEXPR_FN_14 span<element_type, dynamic_extent> last(size_type count) const
     {
-        MBED_ASSERT(0 <= count && count <= Extent);
-        return span<element_type, SPAN_DYNAMIC_EXTENT>(
-                   _data + (Extent - count),
-                   count
-               );
+#ifdef MBED_DEBUG
+        MBED_ASSERT(count <= size());
+#endif
+        return {data() + (size() - count), count};
     }
 
     /**
@@ -462,542 +642,97 @@ struct span {
      * @param offset The offset of the first element viewed by the subspan.
      *
      * @param count The number of elements present in the subspan. If Count
-     * is equal to SPAN_DYNAMIC_EXTENT, then a span starting at offset and
+     * is equal to dynamic_extent, then a span starting at offset and
      * containing the rest of the elements is returned.
      *
      * @return
      */
-    span<element_type, SPAN_DYNAMIC_EXTENT> subspan(
-        index_type offset, index_type count = SPAN_DYNAMIC_EXTENT
-    ) const
-    {
-        MBED_ASSERT(0 <= offset && offset <= Extent);
-        MBED_ASSERT(
-            (count == SPAN_DYNAMIC_EXTENT) ||
-            (0 <= count && (count + offset) <= Extent)
-        );
-        return span<element_type, SPAN_DYNAMIC_EXTENT>(
-                   _data + offset,
-                   count == SPAN_DYNAMIC_EXTENT ? Extent - offset : count
-               );
-    }
-
-private:
-    pointer _data;
-};
-
-/**
- * span specialization that handle dynamic size.
- */
-template<typename ElementType>
-struct span<ElementType, SPAN_DYNAMIC_EXTENT> {
-    /**
-     * Type of the element contained.
-     */
-    typedef ElementType element_type;
-
-    /**
-     * Type of the index.
-     */
-    typedef ptrdiff_t index_type;
-
-    /**
-     * Pointer to an ElementType.
-     */
-    typedef element_type *pointer;
-
-    /**
-     * Reference to an ElementType.
-     */
-    typedef element_type &reference;
-
-    /**
-     * Size of the Extent; -1 if dynamic.
-     */
-    static const index_type extent = SPAN_DYNAMIC_EXTENT;
-
-    /**
-     * Construct an empty span.
-     *
-     * @post a call to size() returns 0, and data() returns nullptr.
-     *
-     * @note This function is not accessible if Extent != SPAN_DYNAMIC_EXTENT or
-     * Extent != 0 .
-     */
-    span() :
-        _data(nullptr), _size(0) { }
-
-    /**
-     * Construct a span from a pointer to a buffer and its size.
-     *
-     * @param ptr Pointer to the beginning of the data viewed.
-     *
-     * @param count Number of elements viewed.
-     *
-     * @pre [ptr, ptr + count) must be be a valid range.
-     * @pre count must be equal to extent.
-     *
-     * @post a call to size() returns count, and data() returns @p ptr.
-     */
-    span(pointer ptr, index_type count) :
-        _data(ptr), _size(count)
-    {
-        MBED_ASSERT(count >= 0);
-        MBED_ASSERT(ptr != nullptr || count == 0);
-    }
-
-    /**
-     * Construct a span from the range [first, last).
-     *
-     * @param first Pointer to the beginning of the data viewed.
-     * @param last End of the range (element after the last element).
-     *
-     * @pre [first, last) must be be a valid range.
-     * @pre first <= last.
-     *
-     * @post a call to size() returns the result of (last - first), and
-     * data() returns @p first.
-     */
-    span(pointer first, pointer last) :
-        _data(first), _size(last - first)
-    {
-        MBED_ASSERT(first <= last);
-        MBED_ASSERT(first != nullptr  || (last - first) == 0);
-    }
-
-    // AStyle ignore, not handling correctly below
-    // *INDENT-OFF*
-    /**
-     * Construct a span from the reference to an array.
-     *
-     * @param elements Reference to the array viewed.
-     *
-     * @tparam Count Number of elements of T presents in the array.
-     *
-     * @post a call to size() returns Count, and data() returns a
-     * pointer to elements.
-     */
-    template<size_t Count>
-    span(element_type (&elements)[Count]):
-        _data(elements), _size(Count) { }
-
-    /**
-     * Construct a span object from another span.
-     *
-     * @param other The span object used to construct this.
-     *
-     * @note For span with a positive extent, this function is not accessible.
-     *
-     * @note OtherElementType(*)[] must be convertible to ElementType(*)[].
-     */
-    template<typename OtherElementType, ptrdiff_t OtherExtent>
-    span(const span<OtherElementType, OtherExtent> &other):
-        _data(other.data()), _size(other.size())
-    {
-        static_assert(
-            (is_convertible<OtherElementType (*)[1], ElementType (*)[1]>::value),
-            "OtherElementType(*)[] should be convertible to ElementType (*)[]"
-        );
-    }
-    // *INDENT-ON*
-
-    /**
-     * Return the size of the array viewed.
-     *
-     * @return The number of elements present in the array viewed.
-     */
-    index_type size() const
-    {
-        return _size;
-    }
-
-    /**
-     * Return if the sequence viewed is empty or not.
-     *
-     * @return true if the sequence is empty and false otherwise.
-     */
-    bool empty() const
-    {
-        return size() == 0;
-    }
-
-    /**
-     * Access to an element of the sequence.
-     *
-     * @param index Element index to access.
-     *
-     * @return A reference to the element at the index specified in input.
-     *
-     * @pre index is less than size().
-     */
-    reference operator[](index_type index) const
+    MSTD_CONSTEXPR_FN_14 span<element_type, dynamic_extent>
+    subspan(size_type offset, size_type count = dynamic_extent) const
     {
 #ifdef MBED_DEBUG
-        MBED_ASSERT(0 <= index && index < _size);
+        MBED_ASSERT(offset <= size());
+        MBED_ASSERT(
+            (count == dynamic_extent) ||
+            ((count + offset) <= size())
+        );
 #endif
-        return _data[index];
+        return {
+                   data() + offset,
+                   count == dynamic_extent ? size() - offset : count
+               };
     }
 
-    /**
-     * Get the raw pointer to the sequence viewed.
-     *
-     * @return The raw pointer to the first element viewed.
-     */
-    pointer data() const
+    constexpr iterator begin() const
     {
-        return _data;
+        return iterator(data());
     }
 
-    /**
-     * Create a new span over the first @p Count elements of the existing view.
-     *
-     * @tparam Count The number of elements viewed by the new span.
-     *
-     * @return A new span over the first @p Count elements.
-     *
-     * @pre Count >= 0 && Count <= size().
-     */
-    template<ptrdiff_t Count>
-    span<element_type, Count> first() const
+    constexpr iterator end() const
     {
-        MBED_ASSERT((Count >= 0) && (Count <= _size));
-        return span<element_type, Count>(_data, Count);
+        return begin() + size();
     }
 
-    /**
-     * Create a new span over the last @p Count elements of the existing view.
-     *
-     * @tparam Count The number of elements viewed by the new span.
-     *
-     * @return A new span over the last @p Count elements.
-     *
-     * @pre Count >= 0 && Count <= size().
-     */
-    template<ptrdiff_t Count>
-    span<element_type, Count> last() const
+    MSTD_CONSTEXPR_FN_14 reverse_iterator rbegin() const
     {
-        MBED_ASSERT((0 <= Count) && (Count <= _size));
-        return span<element_type, Count>(_data + (_size - Count), Count);
+        return reverse_iterator(end());
     }
 
-    /**
-     * Create a subspan that is a view other Count elements; the view starts at
-     * element Offset.
-     *
-     * @tparam Offset The offset of the first element viewed by the subspan.
-     *
-     * @tparam Count The number of elements present in the subspan. If Count
-     * is equal to SPAN_DYNAMIC_EXTENT, then a span starting at offset and
-     * containing the rest of the elements is returned.
-     *
-     * @return A subspan of this starting at Offset and Count long.
-     */
-    template<std::ptrdiff_t Offset, std::ptrdiff_t Count>
-    span<element_type, Count>
-    subspan() const
+    MSTD_CONSTEXPR_FN_14 reverse_iterator rend() const
     {
-        MBED_ASSERT(0 <= Offset && Offset <= _size);
-        MBED_ASSERT(
-            (Count == SPAN_DYNAMIC_EXTENT) ||
-            (0 <= Count && (Count + Offset) <= _size)
-        );
-        return span<element_type, Count>(
-                   _data + Offset,
-                   Count == SPAN_DYNAMIC_EXTENT ? _size - Offset : Count
-               );
+        return reverse_iterator(begin());
     }
 
-    /**
-     * Create a new span over the first @p count elements of the existing view.
-     *
-     * @param count The number of elements viewed by the new span.
-     *
-     * @return A new span over the first @p count elements.
-     */
-    span<element_type, SPAN_DYNAMIC_EXTENT> first(index_type count) const
+    constexpr const_iterator cbegin() const
     {
-        MBED_ASSERT(0 <= count && count <= _size);
-        return span<element_type, SPAN_DYNAMIC_EXTENT>(_data, count);
+        return const_iterator(data());
     }
 
-    /**
-     * Create a new span over the last @p count elements of the existing view.
-     *
-     * @param count The number of elements viewed by the new span.
-     *
-     * @return A new span over the last @p count elements.
-     */
-    span<element_type, SPAN_DYNAMIC_EXTENT> last(index_type count) const
+    constexpr const_iterator cend() const
     {
-        MBED_ASSERT(0 <= count && count <= _size);
-        return span<element_type, SPAN_DYNAMIC_EXTENT>(
-                   _data + (_size - count),
-                   count
-               );
+        return cbegin() + size();
     }
 
-    /**
-     * Create a subspan that is a view of other count elements; the view starts at
-     * element offset.
-     *
-     * @param offset The offset of the first element viewed by the subspan.
-     *
-     * @param count The number of elements present in the subspan. If Count
-     * is equal to SPAN_DYNAMIC_EXTENT, then a span starting at offset and
-     * containing the rest of the elements is returned.
-     *
-     * @return A subspan of this starting at offset and count long.
-     */
-    span<element_type, SPAN_DYNAMIC_EXTENT> subspan(
-        index_type offset, index_type count = SPAN_DYNAMIC_EXTENT
-    ) const
+    MSTD_CONSTEXPR_FN_14 const_reverse_iterator crbegin() const
     {
-        MBED_ASSERT(0 <= offset && offset <= _size);
-        MBED_ASSERT(
-            (count == SPAN_DYNAMIC_EXTENT) ||
-            (0 <= count && (count + offset) <= _size)
-        );
-        return span<element_type, SPAN_DYNAMIC_EXTENT>(
-                   _data + offset,
-                   count == SPAN_DYNAMIC_EXTENT ? _size - offset : count
-               );
+        return const_reverse_iterator(cend());
     }
 
-private:
-    pointer _data;
-    index_type _size;
+    MSTD_CONSTEXPR_FN_14 const_reverse_iterator crend() const
+    {
+        return const_reverse_iterator(cbegin());
+    }
 };
 
-/**
- * Equality operator between two span objects.
- *
- * @param lhs Left side of the binary operation.
- * @param rhs Right side of the binary operation.
- *
- * @return True if Spans in input have the same size and the same content and
- * false otherwise.
- *
- * @relates span
- */
-template<typename T, typename U, ptrdiff_t LhsExtent, ptrdiff_t RhsExtent>
-bool operator==(const span<T, LhsExtent> &lhs, const span<U, RhsExtent> &rhs)
-{
-    if (lhs.size() != rhs.size()) {
-        return false;
-    }
-
-    if (lhs.data() == rhs.data()) {
-        return true;
-    }
-
-    return std::equal(lhs.data(), lhs.data() + lhs.size(), rhs.data());
-}
-
-// AStyle ignore, not handling correctly below
-// *INDENT-OFF*
-/**
- * Equality operation between a span and a reference to a C++ array.
- *
- * @param lhs Left side of the binary operation.
- * @param rhs Right side of the binary operation.
- *
- * @return True if elements in input have the same size and the same content and
- * false otherwise.
- */
-template<typename T, ptrdiff_t LhsExtent, ptrdiff_t RhsExtent>
-bool operator==(const span<T, LhsExtent> &lhs, T (&rhs)[RhsExtent])
-{
-    return lhs == span<T>(rhs);
-}
-
-/**
- * Equality operation between a span and a reference to a C++ array.
- *
- * @param lhs Left side of the binary operation.
- * @param rhs Right side of the binary operation.
- *
- * @return True if elements in input have the same size and the same content
- * and false otherwise.
- */
-template<typename T, ptrdiff_t LhsExtent, ptrdiff_t RhsExtent>
-bool operator==(T (&lhs)[LhsExtent], const span<T, RhsExtent> &rhs)
-{
-    return span<T>(lhs) == rhs;
-}
-
-/**
- * Not equal operator
- *
- * @param lhs Left side of the binary operation.
- * @param rhs Right side of the binary operation.
- *
- * @return True if arrays in input do not have the same size or the same content
- * and false otherwise.
- *
- * @relates span
- */
-template<typename T, typename U, ptrdiff_t LhsExtent, ptrdiff_t RhsExtent>
-bool operator!=(const span<T, LhsExtent> &lhs, const span<U, RhsExtent> &rhs)
-{
-    return !(lhs == rhs);
-}
-
-/**
- * Not Equal operation between a span and a reference to a C++ array.
- *
- * @param lhs Left side of the binary operation.
- * @param rhs Right side of the binary operation.
- *
- * @return True if elements in input have the same size and the same content
- * and false otherwise.
- */
-template<typename T, ptrdiff_t LhsExtent, ptrdiff_t RhsExtent>
-bool operator!=(const span<T, LhsExtent> &lhs, T (&rhs)[RhsExtent])
-{
-    return !(lhs == span<T, RhsExtent>(rhs));
-}
-
-/**
- * Not Equal operation between a span and a reference to a C++ array.
- *
- * @param lhs Left side of the binary operation.
- * @param rhs Right side of the binary operation.
- *
- * @return True if elements in input have the same size and the same content
- * and false otherwise.
- */
-template<typename T, ptrdiff_t LhsExtent, ptrdiff_t RhsExtent>
-bool operator!=(T (&lhs)[LhsExtent], const span<T, RhsExtent> &rhs)
-{
-    return !(span<T, LhsExtent>(lhs) == rhs);
-}
-
-/**
- * Generate a span from a reference to a C/C++ array.
- *
- * @tparam T Type of elements held in elements.
- * @tparam Extent Number of items held in elements.
- *
- * @param elements The reference to the array viewed.
- *
- * @return The span to elements.
- *
- * @note This helper avoids the typing of template parameter when span is
- * created 'inline'.
- *
- * @relates span
- */
-template<typename T, size_t Size>
-span<T, Size> make_span(T (&elements)[Size])
-{
-    return span<T, Size>(elements);
-}
-
-/**
- * Generate a span from a pointer to a C/C++ array.
- *
- * @tparam Extent Number of items held in elements.
- * @tparam T Type of elements held in elements.
- *
- * @param elements The reference to the array viewed.
- *
- * @return The span to elements.
- *
- * @note This helper avoids the typing of template parameter when span is
- * created 'inline'.
- */
-template<ptrdiff_t Extent, typename T>
-span<T, Extent> make_span(T *elements)
-{
-    return span<T, Extent>(elements, Extent);
-}
-
-/**
- * Generate a span from a C/C++ pointer and the size of the array.
- *
- * @tparam T Type of elements held in array_ptr.
- *
- * @param array_ptr The pointer to the array viewed.
- * @param array_size The number of T elements in the array.
- *
- * @return The span to array_ptr with a size of array_size.
- *
- * @note This helper avoids the typing of template parameter when span is
- * created 'inline'.
- * 
- * @relates span
- */
-template<typename T>
-span<T> make_span(T *array_ptr, ptrdiff_t array_size)
-{
-    return span<T>(array_ptr, array_size);
-}
-
-/**
- * Generate a span to a const content from a reference to a C/C++ array.
- *
- * @tparam T Type of elements held in elements.
- * @tparam Extent Number of items held in elements.
- *
- * @param elements The array viewed.
- * @return The span to elements.
- *
- * @note This helper avoids the typing of template parameter when span is
- * created 'inline'.
- */
-template<typename T, size_t Extent>
-span<const T, Extent> make_const_span(const T (&elements)[Extent])
-{
-    return span<const T, Extent>(elements);
-}
-// *INDENT-ON*
-/**
- * Generate a span to a const content from a pointer to a C/C++ array.
- *
- * @tparam Extent Number of items held in elements.
- * @tparam T Type of elements held in elements.
- *
- * @param elements The reference to the array viewed.
- *
- * @return The span to elements.
- *
- * @note This helper avoids the typing of template parameter when span is
- * created 'inline'.
- *
- * @relates span
- */
-template<size_t Extent, typename T>
-span<const T, Extent> make_const_span(const T *elements)
-{
-    return span<const T, Extent>(elements, Extent);
-}
-
-/**
- * Generate a span to a const content from a C/C++ pointer and the size of the
- * array.
- *
- * @tparam T Type of elements held in array_ptr.
- *
- * @param array_ptr The pointer to the array to viewed.
- * @param array_size The number of T elements in the array.
- *
- * @return The span to array_ptr with a size of array_size.
- *
- * @note This helper avoids the typing of template parameter when span is
- * created 'inline'.
- *
- * @relates span
- */
-template<typename T>
-span<const T> make_const_span(T *array_ptr, size_t array_size)
-{
-    return span<const T>(array_ptr, array_size);
-}
-
 /**@}*/
 
 /**@}*/
 
-} // namespace mbed
+} // namespace mstd
+
+namespace std {
+// [span.tuple]
+// Base templates for tuple_size, tuple_element and get are defined in <array>
+// User specialization is permitted.
+template<typename ElementType, size_t Extent>
+struct tuple_size<mstd::span<ElementType, Extent>> : integral_constant<size_t, Extent> { };
+
+template<typename ElementType>
+struct tuple_size<mstd::span<ElementType, mstd::dynamic_extent>>; // not defined
+
+template<size_t I, typename ElementType, size_t Extent>
+struct tuple_element<I, mstd::span<ElementType, Extent>> : mstd::type_identity<ElementType> {
+    static_assert(Extent != mstd::dynamic_extent, "tuple_element not available for dynamic span");
+    static_assert(I < Extent, "span index out of bounds");
+};
+
+template <size_t I, typename ElementType, size_t Extent>
+MSTD_CONSTEXPR_FN_14 ElementType &get(mstd::span<ElementType, Extent> s) noexcept
+{
+    static_assert(Extent != mstd::dynamic_extent, "get not available for dynamic span");
+    static_assert(I < Extent, "span index out of bounds");
+    return s[I];
+}
+} // namespace std
 
 #endif /* MSTD_SPAN_H_ */
