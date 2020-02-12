@@ -60,7 +60,7 @@ unsigned equeue_tick()
         // should not be called from critical sections, for
         // performance reasons, but I don't have a good
         // current alternative!
-        return mbed::internal::os_timer->get_time() / 1000;
+        return mbed::internal::os_timer->get_time().time_since_epoch().count() / 1000;
     } else {
         return rtos::Kernel::get_ms_count();
     }
