@@ -44,7 +44,7 @@ extern "C" {
     {
         auto d = duration<uint32_t, std::milli>(millisec);
 #if MBED_CONF_RTOS_PRESENT
-        rtos::ThisThread::sleep_for(millisec);
+        rtos::ThisThread::sleep_for(d);
 #else
         // Undocumented, but osDelay(UINT32_MAX) does actually sleep forever
         mbed::internal::do_timed_sleep_relative_or_forever(d);
@@ -55,7 +55,7 @@ extern "C" {
     {
         auto d = duration<uint64_t, std::milli>(millisec);
 #if MBED_CONF_RTOS_PRESENT
-        rtos::ThisThread::sleep_until(millisec);
+        rtos::ThisThread::sleep_until(rtos::Kernel::Clock::time_point(d));
 #else
         mbed::internal::do_timed_sleep_absolute(mbed::internal::OsClock::time_point(d));
 #endif
