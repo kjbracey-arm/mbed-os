@@ -18,6 +18,7 @@
 #include "drivers/LowPowerTimeout.h"
 #include "drivers/HighResClock.h"
 #include "drivers/LowPowerClock.h"
+#include "drivers/RealTimeClock.h"
 
 using namespace std::chrono;
 
@@ -50,5 +51,6 @@ LowPowerTimeout::LowPowerTimeout() : TimeoutBase(get_lp_ticker_data(), false)
  */
 const bool HighResClock::is_steady;
 const bool LowPowerClock::is_steady;
+const bool RealTimeClock::is_steady;
 
 } // namespace mbed
